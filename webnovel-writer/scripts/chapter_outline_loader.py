@@ -15,6 +15,21 @@ except ImportError:  # pragma: no cover
 
 
 _CHAPTER_RANGE_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
+_VOLUME_OUTLINE_FILENAME_RE = re.compile(
+    r"^第\s*0*(?P<volume>\d+)\s*卷\s*(?:[-—_ ]\s*)?详细大纲\.md$",
+    re.IGNORECASE,
+)
+_VOLUME_HEADING_RE = re.compile(
+    r"^#{1,6}\s*第\s*(?P<volume>\d+)\s*卷\s*[\uff1a:]?\s*(?P<title>.*?)\s*$",
+    re.MULTILINE,
+)
+_STAGE_HEADING_RE = re.compile(
+    r"^#{1,6}\s*阶段\s*(?P<index>[0-9零〇一二两三四五六七八九十]+)"
+    r"\s*[·・\.\-—]?\s*(?P<label>[^\uff08(\n]*?)\s*"
+    r"[（(]\s*第\s*(?P<start>\d+)\s*[-—–~至]\s*(?P<end>\d+)\s*章"
+    r"(?:\s*[,\uff0c\uff5c|]\s*(?P<period>[^\uff09)\n]+))?\s*[）)]\s*$",
+    re.MULTILINE,
+)
 
 
 def _parse_chapters_range(value: object) -> tuple[int, int] | None:
@@ -87,15 +102,19 @@ def _find_split_outline_file(outline_dir: Path, chapter_num: int) -> Path | None
     return None
 
 
-def _find_volume_outline_file(project_root: Path, chapter_num: int) -> Path | None:
+def _find_volume_outline_file_by_volume(project_root: Path, volume_num: int) -> Path | None:
     outline_dir = project_root / "大纲"
-    volume_num = volume_num_for_chapter_from_state(project_root, chapter_num) or volume_num_for_chapter(chapter_num)
     candidates = [
         outline_dir / f"第{volume_num}卷-详细大纲.md",
         outline_dir / f"第{volume_num}卷 - 详细大纲.md",
         outline_dir / f"第{volume_num}卷 详细大纲.md",
     ]
     return next((path for path in candidates if path.exists()), None)
+
+
+def _find_volume_outline_file(project_root: Path, chapter_num: int) -> Path | None:
+    volume_num = volume_num_for_chapter_from_state(project_root, chapter_num) or volume_num_for_chapter(chapter_num)
+    return _find_volume_outline_file_by_volume(project_root, volume_num)
 
 
 def _extract_outline_section(content: str, chapter_num: int) -> str | None:
@@ -204,6 +223,7 @@ _DIRECTIVE_FIELD_MAP = {
     "时间": "time_anchor",
     "章内跨度": "chapter_span",
     "章节跨度": "chapter_span",
+    "与上章": "previous_chapter_link",
     "倒计时状态": "countdown",
     "倒计时": "countdown",
     "cbn": "cbn",
@@ -219,6 +239,12 @@ _DIRECTIVE_FIELD_MAP = {
     "涉及实体": "key_entities",
     "strand": "strand",
     "反派层级": "antagonist_tier",
+    "核心冲突": "core_conflict",
+    "爽点": "payoff",
+    "视角/主角": "viewpoint",
+    "本章变化": "planned_changes",
+    "未闭合问题": "chapter_end_open_question",
+    "钩子": "hook",
 }
 
 _DIRECTIVE_LIST_FIELDS = {"cpns", "must_cover_nodes", "forbidden_zones", "key_entities"}
@@ -228,6 +254,7 @@ def _clean_plot_line(line: str) -> str:
     text = str(line or "").strip()
     text = re.sub(r"^[\-\*•]+\s*", "", text)
     text = re.sub(r"^\d+[\.、]\s*", "", text)
+    text = text.replace("**", "").replace("__", "")
     return text.strip()
 
 
@@ -345,22 +372,25 @@ def parse_chapter_execution_directive(outline_text: str) -> Dict[str, Any]:
             current_field = ""
             continue
 
-        cleaned = _clean_plot_line(stripped)
-        matched_field = ""
-        matched_value = ""
-        for label, field in _DIRECTIVE_FIELD_MAP.items():
-            match = re.match(rf"^{re.escape(label)}\s*[：:]\s*(.*)$", cleaned, re.IGNORECASE)
-            if match:
-                matched_field = field
-                matched_value = match.group(1).strip()
-                break
+        for segment in stripped.split("｜"):
+            cleaned = _clean_plot_line(segment)
+            if not cleaned:
+                continue
+            matched_field = ""
+            matched_value = ""
+            for label, field in _DIRECTIVE_FIELD_MAP.items():
+                match = re.match(rf"^{re.escape(label)}\s*[：:]\s*(.*)$", cleaned, re.IGNORECASE)
+                if match:
+                    matched_field = field
+                    matched_value = match.group(1).strip()
+                    break
 
-        if matched_field:
-            current_field = matched_field
-            _append_directive_value(directive, matched_field, matched_value)
-            continue
-        if current_field:
-            _append_directive_value(directive, current_field, cleaned)
+            if matched_field:
+                current_field = matched_field
+                _append_directive_value(directive, matched_field, matched_value)
+                continue
+            if current_field:
+                _append_directive_value(directive, current_field, cleaned)
 
     plot_structure = parse_chapter_plot_structure(text)
     for source_key, target_key in (
@@ -391,3 +421,133 @@ def load_chapter_execution_directive(project_root: Path, chapter_num: int) -> Di
     if section is None:
         return {}
     return parse_chapter_execution_directive(section)
+
+
+def _volume_title_from_content(content: str, volume_num: int) -> str:
+    for match in _VOLUME_HEADING_RE.finditer(content):
+        try:
+            matched_volume = int(match.group("volume"))
+        except (TypeError, ValueError):
+            continue
+        if matched_volume != volume_num:
+            continue
+        title = str(match.group("title") or "").strip()
+        title = re.sub(r"\s*[-—]\s*详细大纲\s*$", "", title).strip()
+        if title == "详细大纲":
+            return ""
+        return title
+    return ""
+
+
+def _chapter_title_from_heading(heading: str) -> str:
+    match = re.match(
+        r"^#{1,6}\s*第\s*[0-9零〇一二两三四五六七八九十]+\s*章\s*[\uff1a:]?\s*(.*?)\s*$",
+        str(heading or ""),
+    )
+    return str(match.group(1) or "").strip() if match else ""
+
+
+def load_volume_outline_plan(project_root: Path, volume_num: int) -> Dict[str, Any]:
+    """读取一份详细卷纲，返回看板可直接使用的阶段与章节计划。"""
+    if volume_num <= 0:
+        return {}
+    outline_path = _find_volume_outline_file_by_volume(project_root, volume_num)
+    if outline_path is None:
+        return {}
+    try:
+        content = outline_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+
+    stage_matches = list(_STAGE_HEADING_RE.finditer(content))
+    stages: list[Dict[str, Any]] = []
+    for order, match in enumerate(stage_matches, start=1):
+        try:
+            start = int(match.group("start"))
+            end = int(match.group("end"))
+        except (TypeError, ValueError):
+            continue
+        if start <= 0 or end < start:
+            continue
+        index_label = str(match.group("index") or order).strip()
+        name = str(match.group("label") or "").strip()
+        stages.append(
+            {
+                "id": f"outline-stage-{order}",
+                "label": f"阶段{index_label}" + (f" · {name}" if name else ""),
+                "name": name,
+                "start_chapter": start,
+                "end_chapter": end,
+                "period": str(match.group("period") or "").strip(),
+                "source": "volume_outline",
+            }
+        )
+
+    chapter_matches = list(_CHAPTER_HEADING_RE.finditer(content))
+    chapters: list[Dict[str, Any]] = []
+    for index, match in enumerate(chapter_matches):
+        chapter_num = _parse_chinese_chapter_num(match.group(2))
+        if not chapter_num or chapter_num <= 0:
+            continue
+        end = chapter_matches[index + 1].start() if index + 1 < len(chapter_matches) else len(content)
+        next_stage = next((item.start() for item in stage_matches if match.end() < item.start() < end), None)
+        if next_stage is not None:
+            end = next_stage
+        section = content[match.start():end].strip()
+        directive = parse_chapter_execution_directive(section)
+        chapters.append(
+            {
+                "chapter": chapter_num,
+                "title": _chapter_title_from_heading(match.group(0)),
+                "status": "planned",
+                "is_recorded": False,
+                "word_count": 0,
+                "location": "",
+                "summary": str(directive.get("goal") or "").strip(),
+                "entities": [],
+                "new_entities": [],
+                "changes": [],
+                "planned_entities": directive.get("key_entities") or [],
+                "outline": directive,
+                "outline_source": str(outline_path.relative_to(project_root)),
+            }
+        )
+
+    chapter_numbers = [item["chapter"] for item in chapters]
+    range_candidates = [(item["start_chapter"], item["end_chapter"]) for item in stages]
+    if chapter_numbers:
+        range_candidates.append((min(chapter_numbers), max(chapter_numbers)))
+    start_chapter = min((item[0] for item in range_candidates), default=0)
+    end_chapter = max((item[1] for item in range_candidates), default=0)
+    title = _volume_title_from_content(content, volume_num)
+    return {
+        "volume": volume_num,
+        "title": title,
+        "label": f"第 {volume_num} 卷" + (f" · {title}" if title else ""),
+        "start_chapter": start_chapter,
+        "end_chapter": end_chapter,
+        "stages": stages,
+        "chapters": sorted(chapters, key=lambda item: item["chapter"]),
+        "source_file": str(outline_path.relative_to(project_root)),
+    }
+
+
+def load_all_volume_outline_plans(project_root: Path) -> list[Dict[str, Any]]:
+    """扫描大纲目录中的详细卷纲；一卷最多返回一份计划。"""
+    outline_dir = project_root / "大纲"
+    if not outline_dir.is_dir():
+        return []
+    volume_numbers: set[int] = set()
+    for path in outline_dir.glob("*.md"):
+        match = _VOLUME_OUTLINE_FILENAME_RE.match(path.name)
+        if not match:
+            continue
+        try:
+            volume_numbers.add(int(match.group("volume")))
+        except (TypeError, ValueError):
+            continue
+    return [
+        plan
+        for volume_num in sorted(volume_numbers)
+        if (plan := load_volume_outline_plan(project_root, volume_num))
+    ]

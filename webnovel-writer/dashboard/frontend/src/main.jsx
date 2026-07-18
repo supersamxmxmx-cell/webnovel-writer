@@ -9,6 +9,7 @@ const CharactersPage = lazy(() => import('./pages/CharactersPage.jsx'))
 const PacingPage = lazy(() => import('./pages/PacingPage.jsx'))
 const ForeshadowingPage = lazy(() => import('./pages/ForeshadowingPage.jsx'))
 const FilesPage = lazy(() => import('./pages/FilesPage.jsx'))
+const MilestonesPage = lazy(() => import('./pages/MilestonesPage.jsx'))
 const SystemPage = lazy(() => import('./pages/SystemPage.jsx'))
 
 function LoadingScreen() {
@@ -33,6 +34,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                         <Route path="pacing" element={<PacingPage />} />
                         <Route path="foreshadowing" element={<ForeshadowingPage />} />
                         <Route path="files" element={<FilesPage />} />
+                        <Route path="milestones" element={<MilestonesPage />} />
                         <Route path="system" element={<SystemPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>

@@ -352,6 +352,10 @@ def test_dashboard_app_imports_without_scripts_path(monkeypatch, tmp_path):
     response = client.get("/api/story-runtime/health")
     assert response.status_code == 200
 
+    milestones_response = client.get("/api/milestones")
+    assert milestones_response.status_code == 200
+    assert milestones_response.json()["volumes"] == []
+
 
 def test_dashboard_chapter_trend_endpoint_returns_recent_window(monkeypatch, tmp_path):
     project_root = tmp_path / "book"
@@ -371,6 +375,147 @@ def test_dashboard_chapter_trend_endpoint_returns_recent_window(monkeypatch, tmp
     assert payload["items"][0]["strand"] == "fire"
     assert payload["items"][0]["volume"] == 1
     assert payload["items"][1]["volume"] == 2
+
+
+def test_dashboard_milestones_groups_volumes_stages_chapters_and_entities(monkeypatch, tmp_path):
+    project_root = tmp_path / "book"
+    _build_project_data(project_root)
+    db_path = project_root / ".webnovel" / "index.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.executemany(
+            """
+            INSERT INTO entities (
+                id, type, canonical_name, tier, desc, current_json,
+                first_appearance, last_appearance, is_protagonist, is_archived
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "lintian",
+                    "角色",
+                    "林长青",
+                    "核心",
+                    "主角",
+                    json.dumps({"境界": "筑基"}, ensure_ascii=False),
+                    1,
+                    3,
+                    1,
+                    0,
+                ),
+                (
+                    "secret-key",
+                    "物品",
+                    "秘境钥匙",
+                    "重要",
+                    "开启秘境",
+                    "{}",
+                    2,
+                    3,
+                    0,
+                    0,
+                ),
+                (
+                    "star-fire",
+                    "招式",
+                    "星火诀",
+                    "重要",
+                    "攻击能力",
+                    json.dumps({"层级": 1}, ensure_ascii=False),
+                    3,
+                    3,
+                    0,
+                    0,
+                ),
+                ("archived", "角色", "已归档角色", "装饰", "", "{}", 1, 1, 0, 1),
+            ],
+        )
+        conn.execute(
+            """
+            INSERT INTO state_changes (entity_id, field, old_value, new_value, reason, chapter)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("lintian", "境界", "练气", "筑基", "突破成功", 3),
+        )
+        conn.commit()
+
+    client = _create_dashboard_client(monkeypatch, project_root)
+    response = client.get("/api/milestones")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["current_chapter"] == 3
+    assert payload["current_volume"] == 2
+    assert payload["recorded_chapters"] == 3
+    assert payload["planned_chapters"] == 10
+    assert payload["entity_total"] == 3
+    assert payload["entity_counts"] == {"角色": 1, "物品": 1, "招式": 1}
+
+    first_volume, second_volume = payload["volumes"]
+    assert first_volume["range_id"] == "1-1-2"
+    assert first_volume["recorded_chapters"] == 2
+    assert first_volume["completion_percent"] == 100.0
+    assert [stage["label"] for stage in first_volume["stages"]] == ["开篇", "收束"]
+    assert [stage["chapters"][0]["chapter"] for stage in first_volume["stages"]] == [1, 2]
+    assert first_volume["stages"][1]["chapters"][0]["status"] == "accepted"
+    assert first_volume["stages"][1]["chapters"][0]["new_entities"][0]["type"] == "物品"
+
+    assert second_volume["is_current"] is True
+    assert [stage["label"] for stage in second_volume["stages"]] == ["开篇", "发展", "转折", "收束"]
+    current_chapter = second_volume["stages"][0]["chapters"][0]
+    assert current_chapter["chapter"] == 3
+    assert current_chapter["status"] == "rejected"
+    assert {entity["type"] for entity in current_chapter["entities"]} == {"角色", "招式"}
+    assert current_chapter["changes"][0]["entity_name"] == "林长青"
+    assert current_chapter["changes"][0]["reason"] == "突破成功"
+
+
+def test_dashboard_milestones_merges_detailed_outline_with_recorded_chapters(monkeypatch, tmp_path):
+    project_root = tmp_path / "book"
+    _build_project_data(project_root)
+    outline_dir = project_root / "大纲"
+    outline_dir.mkdir()
+    (outline_dir / "第2卷-详细大纲.md").write_text(
+        "\n".join(
+            [
+                "# 第 2 卷：秘境暗潮 - 详细大纲",
+                "",
+                "## 阶段一·追索（第3-5章，当日夜间）",
+                "",
+                "### 第3章：夜探黑市",
+                "- 目标：确认秘境钥匙来路",
+                "- 关键实体：林长青、秘境钥匙",
+                "",
+                "### 第4章：暗门之后",
+                "- 目标：跟踪黑市贩子",
+                "- 阻力：暗门内有伏兵",
+                "",
+                "### 第5章：钥匙易主",
+                "- 目标：抢在敌人之前拿到钥匙",
+                "- 钩子：钥匙上出现了主角的名字",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    client = _create_dashboard_client(monkeypatch, project_root)
+    response = client.get("/api/milestones")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["outlined_chapters"] == 3
+    second_volume = payload["volumes"][1]
+    assert second_volume["label"] == "第 2 卷 · 秘境暗潮"
+    assert second_volume["outlined_chapters"] == 3
+    assert second_volume["outline_source"] == "大纲/第2卷-详细大纲.md"
+    assert [stage["label"] for stage in second_volume["stages"]] == ["阶段一 · 追索"]
+    chapters = second_volume["stages"][0]["chapters"]
+    assert [item["chapter"] for item in chapters] == [3, 4, 5]
+    assert chapters[0]["is_recorded"] is True
+    assert chapters[0]["status"] == "rejected"
+    assert chapters[0]["outline"]["goal"] == "确认秘境钥匙来路"
+    assert chapters[1]["is_recorded"] is False
+    assert chapters[1]["status"] == "planned"
+    assert chapters[1]["title"] == "暗门之后"
 
 
 def test_dashboard_commits_and_contract_summary_endpoints(monkeypatch, tmp_path):

@@ -1,8 +1,59 @@
 import { startTransition, useEffect, useMemo, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useDashboardContext } from '../App.jsx'
 import Badge from '../components/Badge.jsx'
 import { fetchFileContent, fetchFilesTree } from '../api.js'
 import { findFirstFilePath } from '../lib/files.js'
+
+function previewKind(path) {
+    const normalized = String(path || '').toLowerCase()
+    if (normalized.endsWith('.md') || normalized.endsWith('.markdown')) return 'markdown'
+    if (normalized.endsWith('.json')) return 'json'
+    return 'text'
+}
+
+function formatJson(content) {
+    try {
+        return { value: JSON.stringify(JSON.parse(content), null, 2), valid: true }
+    } catch {
+        return { value: content, valid: false }
+    }
+}
+
+function FilePreview({ path, content, loading }) {
+    if (loading) {
+        return <div className="file-preview loading">读取中…</div>
+    }
+
+    const kind = previewKind(path)
+    if (kind === 'markdown') {
+        return (
+            <div className="file-preview markdown-preview">
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                        a: props => <a {...props} target="_blank" rel="noreferrer" />,
+                    }}
+                >
+                    {content}
+                </ReactMarkdown>
+            </div>
+        )
+    }
+    if (kind === 'json') {
+        const formatted = formatJson(content)
+        return (
+            <div className="json-preview-wrap">
+                {!formatted.valid ? (
+                    <div className="preview-warning">JSON 格式有误，以下显示原始内容</div>
+                ) : null}
+                <pre className="file-preview json-preview">{formatted.value}</pre>
+            </div>
+        )
+    }
+    return <pre className="file-preview text-preview">{content}</pre>
+}
 
 function countTreeItems(items) {
     return (items || []).reduce(
@@ -120,7 +171,9 @@ export default function FilesPage() {
     const totalFiles = useMemo(() => {
         return Object.values(tree).reduce((count, items) => count + countTreeItems(items), 0)
     }, [tree])
-    const lineCount = content ? content.split(/\r?\n/).length : 0
+    const kind = previewKind(selectedPath)
+    const displayedContent = kind === 'json' ? formatJson(content).value : content
+    const lineCount = displayedContent ? displayedContent.split(/\r?\n/).length : 0
 
     return (
         <section className="dashboard-page">
@@ -172,6 +225,9 @@ export default function FilesPage() {
                         </div>
                         {selectedPath ? (
                             <div className="header-badges">
+                                <Badge tone={kind === 'markdown' ? 'purple' : kind === 'json' ? 'cyan' : 'neutral'}>
+                                    {kind === 'markdown' ? 'Markdown' : kind === 'json' ? 'JSON' : '纯文本'}
+                                </Badge>
                                 <Badge tone="amber">{lineCount} 行</Badge>
                                 <Badge tone="green">{content.length} 字符</Badge>
                             </div>
@@ -181,9 +237,7 @@ export default function FilesPage() {
                     {selectedPath ? (
                         <>
                             <div className="selected-path">{selectedPath}</div>
-                            <pre className={`file-preview ${loadingContent ? 'loading' : ''}`.trim()}>
-                                {loadingContent ? '读取中…' : content}
-                            </pre>
+                            <FilePreview path={selectedPath} content={content} loading={loadingContent} />
                         </>
                     ) : (
                         <div className="empty-state">
