@@ -111,10 +111,21 @@ for f in SKILL.md convert_to_workbuddy.py install.sh update.sh; do
 done
 [ -f "$SKILL_DIR/hooks/README.md" ] && cp "$SKILL_DIR/hooks/README.md" "$TMP_WB_FILES/hooks_README.md"
 
-# 覆盖复制原始项目的核心目录（cp -R 会覆盖同名文件，新增文件自动加入，不删除已有文件）
+# 覆盖复制原始项目的核心目录
+# - 普通目录用 cp -R 覆盖（同名文件覆盖，新增文件加入，不删除旧文件）
+# - dashboard/frontend/dist 是 Vite 构建产物，文件名带 content hash，
+#   cp -R 只会添加新文件不会删旧的，所以这个目录要先清空再复制
 for dir in scripts references templates dashboard agents hooks; do
     if [ -d "$SRC_DIR/$dir" ]; then
         mkdir -p "$SKILL_DIR/$dir"
+
+        # dashboard/frontend/dist 特殊处理：先清空再复制
+        if [ "$dir" = "dashboard" ] && [ -d "$SKILL_DIR/dashboard/frontend/dist" ]; then
+            rm -f "$SKILL_DIR/dashboard/frontend/dist/index.html"
+            rm -rf "$SKILL_DIR/dashboard/frontend/dist/assets"
+            info "已清理旧的 dashboard/frontend/dist 构建产物"
+        fi
+
         cp -R "$SRC_DIR/$dir/"* "$SKILL_DIR/$dir/"
         info "已更新 $dir/"
     fi
