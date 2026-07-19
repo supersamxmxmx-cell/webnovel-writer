@@ -1,7 +1,7 @@
 # Webnovel Writer
 
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-6.2.1-brightgreen.svg)](.claude-plugin/marketplace.json)
+[![Version](https://img.shields.io/badge/version-6.2.3-brightgreen.svg)](.claude-plugin/marketplace.json)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
 [![Codex](https://img.shields.io/badge/Codex-Compatible-412991.svg)](https://developers.openai.com/codex/)
@@ -337,7 +337,9 @@ Webnovel Writer 用业余时间维护。如果它帮你省下了梳理设定、�
 
 | 版本 | 主要变化 |
 |------|----------|
-| **v6.2.1 (当前)** | 修复 Windows 写章提交偶发的拒绝访问（WinError 5）：资料文件被短暂占用时自动重试 |
+| **v6.2.3 (当前)** | 统一 Claude/Codex 主线，并升级只读 Dashboard 的文档预览与「里程一览」 |
+| **v6.2.2** | 同步上游开放环、文风记忆修复与 WorkBuddy 集成 |
+| **v6.2.1** | 修复 Windows 写章提交偶发的拒绝访问（WinError 5）：资料文件被短暂占用时自动重试 |
 | **v6.2.0** | 写章结果更清楚，失败后更好恢复 |
 | **v6.1.0** | 插件运行时加固：新增 doctor/project-status/write-gate/projection 重放、hooks、行为 eval 与发布校验 |
 | **v6.0.0** | Story System 全链路上线（合同种子 + 运行时合同 + 章节提交 + 事件审计），补齐集成测试 |

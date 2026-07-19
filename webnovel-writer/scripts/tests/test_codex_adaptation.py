@@ -19,8 +19,10 @@ COMMANDS = {
 
 def test_codex_manifest_points_to_native_skill_root():
     manifest = json.loads((PLUGIN_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    claude_manifest = json.loads((PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
 
     assert manifest["name"] == "webnovel-writer"
+    assert manifest["version"] == claude_manifest["version"]
     assert manifest["skills"] == "./skills/"
     assert (PLUGIN_ROOT / manifest["skills"][2:]).is_dir()
 

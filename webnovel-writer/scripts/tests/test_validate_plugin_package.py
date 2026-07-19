@@ -28,6 +28,10 @@ def _write_minimal_package(root: Path, *, plugin_version: str = "1.2.3", marketp
         {"name": "webnovel-writer", "version": plugin_version, "description": "desc"},
     )
     _write_json(
+        root / "webnovel-writer" / ".codex-plugin" / "plugin.json",
+        {"name": "webnovel-writer", "version": plugin_version, "description": "desc"},
+    )
+    _write_json(
         root / ".claude-plugin" / "marketplace.json",
         {
             "plugins": [
@@ -89,6 +93,20 @@ def test_validate_plugin_package_detects_version_mismatch(tmp_path):
 
     assert report["ok"] is False
     assert any(item["code"] == "version.marketplace" for item in report["issues"])
+
+
+def test_validate_plugin_package_detects_codex_version_mismatch(tmp_path):
+    _write_minimal_package(tmp_path)
+    codex_manifest = tmp_path / "webnovel-writer" / ".codex-plugin" / "plugin.json"
+    _write_json(
+        codex_manifest,
+        {"name": "webnovel-writer", "version": "1.2.2", "description": "desc"},
+    )
+
+    report = validate_package(tmp_path)
+
+    assert report["ok"] is False
+    assert any(item["code"] == "version.codex_manifest" for item in report["issues"])
 
 
 def test_validate_plugin_package_detects_readme_badge_mismatch(tmp_path):
