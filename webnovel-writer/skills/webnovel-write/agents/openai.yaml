@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文章节创作"
+  short_description: "完成写前研究、正文、审查、事实提交和备份全流程"
+  default_prompt: "使用 $webnovel-write 根据章纲创作下一章并完成提交。"
+policy:
+  allow_implicit_invocation: true

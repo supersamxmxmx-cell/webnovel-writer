@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文章节审查"
+  short_description: "检查章节一致性、节奏、角色行为与追读力问题"
+  default_prompt: "使用 $webnovel-review 审查当前网文项目的最新章节。"
+policy:
+  allow_implicit_invocation: true

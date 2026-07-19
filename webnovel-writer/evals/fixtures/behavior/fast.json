@@ -15,7 +15,7 @@
       "required": [
         "未过充分性闸门，不执行 `webnovel.py init`",
         "用户确认前不得写入",
-        "python -X utf8"
+        "${PYTHON_BIN}"
       ]
     },
     {
@@ -57,7 +57,7 @@
       "skill": "webnovel-review",
       "description": "/webnovel-review relies on reviewer output and preserves blocking issue handling.",
       "required": [
-        "必须通过 `Agent` 工具调用 `reviewer`",
+        "必须完整执行 `reviewer` 指令",
         "review-pipeline",
         "blocking=true"
       ]
@@ -92,7 +92,7 @@
       "required": [
         "只读",
         "/api/story-runtime/health",
-        "python -m dashboard.server"
+        "${PYTHON_BIN}\" -m dashboard.server"
       ]
     },
     {

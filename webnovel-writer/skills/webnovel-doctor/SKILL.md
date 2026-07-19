@@ -1,12 +1,11 @@
 ---
 name: webnovel-doctor
 description: 对网文项目做只读体检/诊断（/webnovel-doctor）——检查目录、文件、JSON、SQLite、RAG 配置、依赖与 Dashboard 构建产物是否完整。
-version: 0.1.0
-allowed-tools: Read Bash
-argument-hint: "[--chapter N] [--deep]"
 ---
 
 # Webnovel Doctor
+
+在 Codex 中执行 shell 片段前，先把 `<plugin root>` 替换为当前插件根目录的绝对路径；Claude Code 会直接提供对应宿主变量。
 
 ## 目标
 
@@ -16,7 +15,7 @@ argument-hint: "[--chapter N] [--deep]"
 
 1. 只读诊断：不写项目文件、不自动修复、不安装依赖、不启动 Dashboard。
 2. 先 `project-status` 取短状态，再 `doctor` 做阶段感知检查。
-3. 统一用 `python -X utf8`，避免中文路径编码问题。
+3. 统一用 `"${PYTHON_BIN}" -X utf8`，避免中文路径编码问题。
 4. 缺失项按 runtime 推导的阶段解释影响与修复建议，不把 init 刚结束的项目按已写多章项目检查。
 
 ## 执行
@@ -25,19 +24,22 @@ argument-hint: "[--chapter N] [--deep]"
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT:?}/scripts"
+export PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-<plugin root>}"
+export SCRIPTS_DIR="${PLUGIN_ROOT}/scripts"
+export PYTHON_BIN="${PYTHON_BIN:-python3}"
+export PYTHONPATH="${SCRIPTS_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 ```
 
 短状态：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" project-status --format summary
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" project-status --format summary
 ```
 
 标准体检：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" doctor --format text
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" doctor --format text
 ```
 
 指定章节加 `--chapter {chapter_num}`，深度体检加 `--deep`。

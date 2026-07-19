@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文项目体检"
+  short_description: "只读检查项目结构、依赖、数据库、RAG 和运行状态"
+  default_prompt: "使用 $webnovel-doctor 对当前网文项目做一次完整只读体检。"
+policy:
+  allow_implicit_invocation: true

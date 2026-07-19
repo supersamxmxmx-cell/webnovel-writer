@@ -16,6 +16,7 @@
 ### 使用指南
 
 - [`guides/commands.md`](./guides/commands.md)：Skill 命令与 CLI 子命令速查
+- [`guides/codex.md`](./guides/codex.md)：Codex 原生插件入口、路由与运行时约定
 - [`guides/rag-and-config.md`](./guides/rag-and-config.md)：RAG 检索链路、环境变量与配置
 - [`guides/genres.md`](./guides/genres.md)：37 个题材模板与复合题材规则
 

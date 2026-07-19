@@ -1,11 +1,11 @@
 ---
 name: webnovel-init
 description: 深度初始化网文项目。通过分阶段交互收集完整创作信息，生成可直接进入规划与写作的项目骨架与约束文件。
-allowed-tools: Read Write Edit Grep Bash Agent AskUserQuestion WebSearch WebFetch
-argument-hint: "[书名或灵感（可选）]"
 ---
 
 # Project Initialization (Deep Mode)
+
+在 Codex 中执行 shell 片段前，先把 `<plugin root>` 替换为当前插件根目录的绝对路径；Claude Code 会直接提供对应宿主变量。
 
 ## 目标
 
@@ -30,7 +30,7 @@ argument-hint: "[书名或灵感（可选）]"
 | 角色卡顿 | 人物扁平 | `references/worldbuilding/character-design.md` |
 | 世界观/力量 | 按需 | `references/worldbuilding/faction-systems.md`、`references/worldbuilding/power-systems.md`、`references/worldbuilding/world-rules.md`、`references/worldbuilding/setting-consistency.md` |
 | 创意约束 | Step 6 | `references/creativity/creativity-constraints.md`（区段：采集读 `## 一、创意包 Schema (Idea Package)`、`## 六、硬约束驱动创意 (Hard Constraints)`、`## 八、评分系统 (Scoring System)`，评分展示读 `### 8.1 五维评分`）、`references/creativity/selling-points.md`（区段：`## 9. 核心卖点定位模板` 骨架，按需补 `### 1.3 核心卖点黄金公式`、`## 7. 实战检查清单`）；复合题材读 `creative-combination.md`；卡顿读 `inspiration-collection.md`；题材命中读 `anti-trope-*.md` |
-| 命名 | 开始命名 | `python -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill init --table 命名规则 --query "{命名对象} {题材}" --genre {题材}` |
+| 命名 | 开始命名 | `"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/reference_search.py" --skill init --table 命名规则 --query "{命名对象} {题材}" --genre {题材}` |
 
 按需读取上述长细则（创意约束、反套路库、世界观设计指南、卖点模板），不内联其条目。
 
@@ -38,8 +38,8 @@ argument-hint: "[书名或灵感（可选）]"
 
 - `Read/Grep`：读项目上下文与参考文件。
 - `Bash`：执行 `webnovel.py init`、文件存在性检查、最小验证。
-- `Agent`：拆分并行子任务；Step 1.5 用户选择参考书拆解作灵感来源时调用 `webnovel-writer:deconstruction-agent`。
-- `AskUserQuestion`：关键分歧裁决、候选选择、最终确认。
+- 隔离子任务：宿主规则允许时用于 Step 1.5 的参考书拆解；不可用时完整执行同一代理提示词并明确标注内联降级。
+- 用户提问：关键分歧裁决、候选选择、最终确认。
 - `WebSearch`/`WebFetch`：仅在用户要求市场趋势/平台风向、创意约束需时间敏感依据、或题材信息明显不确定时使用，先 search 后 fetch 核验。
 
 ## 交互流程（Deep）
@@ -49,12 +49,15 @@ argument-hint: "[书名或灵感（可选）]"
 环境设置（bash 命令执行前）：
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+export PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-<plugin root>}"
+export PYTHON_BIN="${PYTHON_BIN:-python3}"
+export PYTHONPATH="${PLUGIN_ROOT}/scripts${PYTHONPATH:+:${PYTHONPATH}}"
 
-if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/scripts" ]; then
-  echo "ERROR: 未设置 CLAUDE_PLUGIN_ROOT 或缺少目录: ${CLAUDE_PLUGIN_ROOT}/scripts" >&2
+if [ ! -d "${PLUGIN_ROOT}/scripts" ]; then
+  echo "ERROR: 未找到插件脚本目录: ${PLUGIN_ROOT}/scripts" >&2
   exit 1
 fi
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
+export SCRIPTS_DIR="${PLUGIN_ROOT}/scripts"
 ```
 
 必须做：
@@ -67,7 +70,7 @@ export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 
 ### Step 1.5：灵感来源询问（可选）
 
-进入故事核采集前，必须先用 `AskUserQuestion` 或直接提问确认用户是否提供灵感来源。不要默认拆书，也不要把参考作品当作必填项。
+进入故事核采集前，必须直接提问确认用户是否提供灵感来源。不要默认拆书，也不要把参考作品当作必填项。
 
 建议询问：
 
@@ -77,10 +80,10 @@ export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 
 可接受来源：原创想法、参考作品拆书（书名/平台/章节摘录/文本路径）、市场趋势、题材模板/反套路库/已有脑洞片段。
 
-当用户选择参考作品拆书且提供文本路径或章节摘录时，必须使用 `Agent` 工具调用 `webnovel-writer:deconstruction-agent`，不得由 init 主流程口头替代拆解结果。
+当用户选择参考作品拆书且提供文本路径或章节摘录时，必须完整执行 `deconstruction-agent` 指令，不得由 init 主流程口头替代拆解结果。
 
 ```text
-Use the Agent tool to run `webnovel-writer:deconstruction-agent`.
+读取 `${PLUGIN_ROOT}/agents/deconstruction-agent.md` 的完整指令。宿主规则允许隔离子任务时，用该指令运行 deconstruction-agent；否则按同一指令内联执行并在 `SubagentRun` 中记录 `inline_fallback`。
 
 Prompt: reference_title={reference_title}; reference_source={reference_source}; reference_text_path={reference_text_path}; reference_text_excerpt={reference_text_excerpt}; analysis_mode={quick|deep|auto}; init_goal={当前初始化故事方向或空}; target_genre={题材或空}。只返回 init_reference_research JSON 对象，不写任何文件，不创建目录，不写 .story-system、.webnovel、设定集、大纲、正文、idea_bank.json、state.json 或任何 canon/read model 文件。
 ```
@@ -165,11 +168,11 @@ canonical 题材集合（写入 `project_info.genre`）：都市、玄幻、仙�
 ## 项目目录安全规则（必须）
 
 - `project_root` 必须由书名安全化生成：`PROJECT_ROOT="${WORKSPACE_ROOT}/${PROJECT_SLUG}"`；安全化结果为空或以 `.` 开头时自动前缀 `proj-`。
-- 禁止在插件目录（`${CLAUDE_PLUGIN_ROOT}`）下生成项目文件；禁止直接把 `WORKSPACE_ROOT` 当作 `PROJECT_ROOT`，除非用户明确指定当前目录就是书项目根。
+- 禁止在插件目录（`${PLUGIN_ROOT}`）下生成项目文件；禁止直接把 `WORKSPACE_ROOT` 当作 `PROJECT_ROOT`，除非用户明确指定当前目录就是书项目根。
 - 初始化前必须展示并确认 `WORKSPACE_ROOT`、`PROJECT_SLUG`、`PROJECT_ROOT`。
 
 ```bash
-PROJECT_SLUG="$(python -X utf8 -c "import re,sys; title=sys.argv[1].strip(); slug=re.sub(r'[\\\\/:*?\"<>|]+','',title); slug=re.sub(r'\\s+','-',slug).strip('-'); print(('proj-' + slug) if (not slug or slug.startswith('.')) else slug)" "{title}")"
+PROJECT_SLUG="$("${PYTHON_BIN}" -X utf8 -c "import re,sys; title=sys.argv[1].strip(); slug=re.sub(r'[\\\\/:*?\"<>|]+','',title); slug=re.sub(r'\\s+','-',slug).strip('-'); print(('proj-' + slug) if (not slug or slug.startswith('.')) else slug)" "{title}")"
 PROJECT_ROOT="${WORKSPACE_ROOT}/${PROJECT_SLUG}"
 echo "WORKSPACE_ROOT=${WORKSPACE_ROOT}"
 echo "PROJECT_SLUG=${PROJECT_SLUG}"
@@ -180,10 +183,10 @@ echo "PROJECT_ROOT=${PROJECT_ROOT}"
 
 ### 1) 运行初始化脚本
 
-参数全部来自上面的采集对象（书名/题材/主角/金手指/世界观/反派/创意约束等），逐字段映射为 `webnovel.py init` 的 `--*` 选项；完整字段清单见 `references/init-collection-schema.md`，可用 `python "${SCRIPTS_DIR}/webnovel.py" init --help` 核对选项名。
+参数全部来自上面的采集对象（书名/题材/主角/金手指/世界观/反派/创意约束等），逐字段映射为 `webnovel.py init` 的 `--*` 选项；完整字段清单见 `references/init-collection-schema.md`，可用 `"${PYTHON_BIN}" "${SCRIPTS_DIR}/webnovel.py" init --help` 核对选项名。
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" init \
+"${PYTHON_BIN}" "${SCRIPTS_DIR}/webnovel.py" init \
   "${PROJECT_ROOT}" "{title}" "{genre}" \
   --protagonist-name "{protagonist_name}" \
   --target-words {target_words} --target-chapters {target_chapters} \
@@ -214,9 +217,9 @@ python "${SCRIPTS_DIR}/webnovel.py" init \
 init 完成后立即生成 MASTER_SETTING，让后续 plan 有调性/禁忌参照。此处不传 `--chapter`（只生成 `MASTER_SETTING.json` 和 `anti_patterns.json`），也不传 `--emit-runtime-contracts`（还没有卷/章级数据）；plan 拆到具体章节时再生成 volume/chapter/review 合同。
 
 ```bash
-GENRE="$(python -X utf8 -c "import json,os; root=os.environ['PROJECT_ROOT']; s=json.load(open(root + '/.webnovel/state.json',encoding='utf-8')); pi=s.get('project_info',{}); print(pi.get('genre') or s.get('project',{}).get('genre',''))")"
+GENRE="$("${PYTHON_BIN}" -X utf8 -c "import json,os; root=os.environ['PROJECT_ROOT']; s=json.load(open(root + '/.webnovel/state.json',encoding='utf-8')); pi=s.get('project_info',{}); print(pi.get('genre') or s.get('project',{}).get('genre',''))")"
 
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
   story-system "${GENRE}" --genre "${GENRE}" --persist --format json
 ```
 
@@ -249,7 +252,7 @@ test "$(basename "${PROJECT_ROOT}")" = "${PROJECT_SLUG}"
 初始化开始前先说明本次会经历：收集故事核心 -> 确认创意约束 -> 生成项目骨架 -> 写入初始故事档案 -> 验证能否进入规划。过程提示用作者语言，不直接输出原始 JSON、traceback 或长命令日志；技术详情写入 `.webnovel/logs/run_last.log`：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" run-log \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" run-log \
   --event init-progress \
   --payload-json "{\"stage\": \"init\"}" \
   --format text
@@ -262,7 +265,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" run
 不可恢复故障才在最终报告提示 `.webnovel/logs/run_last.log`；平时只保留日志，不打扰作者。收尾必须调用作者报告 helper：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" user-report \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" user-report \
   --stage init \
   --format text
 ```

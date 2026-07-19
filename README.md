@@ -4,6 +4,7 @@
 [![Version](https://img.shields.io/badge/version-6.2.1-brightgreen.svg)](.claude-plugin/marketplace.json)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
+[![Codex](https://img.shields.io/badge/Codex-Compatible-412991.svg)](https://developers.openai.com/codex/)
 [![Marketplace](https://img.shields.io/badge/Claude%20Code-Marketplace-black.svg)](.claude-plugin/marketplace.json)
 
 <a href="https://trendshift.io/repositories/22487" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22487" alt="lingfengQAQ%2Fwebnovel-writer | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
@@ -81,6 +82,26 @@ claude plugin install webnovel-writer@webnovel-writer-marketplace --scope user
 只想在当前项目生效时，把 `--scope user` 改成 `--scope project`。
 
 > 插件的安装、启用与日常管理等更多用法，见 Claude Code 官方文档：[插件](https://docs.claude.com/en/docs/claude-code/plugins) · [插件市场](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces)。
+
+### 在 Codex 中使用
+
+仓库同时提供 Codex 原生入口：[`webnovel-writer/.codex-plugin/plugin.json`](webnovel-writer/.codex-plugin/plugin.json)，并通过 [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json) 暴露仓库级插件源。先添加 Marketplace，再安装插件：
+
+```bash
+codex plugin marketplace add supersamxmxmx-cell/webnovel-writer
+codex plugin add webnovel-writer@webnovel-writer-marketplace
+```
+
+本地检出仓库进行开发验证时，可在仓库根目录改用 `codex plugin marketplace add .`。安装后新建 Codex 任务，让技能清单按已安装插件重新加载。
+
+Claude Code 与 Codex 直接共用 `skills/`、Python 运行时、模板、Story System 和数据链；Skill 会按宿主解析插件根目录，Codex 不注册 Claude 专属 Hook。仓库根目录的 [`AGENTS.md`](AGENTS.md) 记录了开发约束和提交前验证命令。
+
+启用该本地插件后，直接用自然语言描述意图即可，例如“初始化一部网文”“规划第 1 卷”“写第 12 章”“审查第 12 章”或“查询某个伏笔”。Codex 会按需调用以下原生工作流：
+
+- `webnovel-init`、`webnovel-plan`、`webnovel-write`、`webnovel-review`
+- `webnovel-query`、`webnovel-learn`、`webnovel-doctor`、`webnovel-dashboard`
+
+Codex 适配的路径约定、子任务替代规则及验证方式见 [Codex 使用指南](docs/guides/codex.md)。两种宿主使用同一份完整流程和书项目，避免维护两套会逐渐漂移的提示词。
 
 ### 2. 安装 Python 依赖
 
@@ -238,6 +259,7 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJE
 | [文档中心](docs/README.md) | 所有文档索引和推荐阅读顺序 |
 | [系统架构与模块](docs/architecture/overview.md) | 核心理念、Agent 分工、Story System 设计 |
 | [命令详解](docs/guides/commands.md) | Skill 命令和 CLI 子命令速查 |
+| [Codex 使用指南](docs/guides/codex.md) | Codex 插件入口、工作流路由与运行时约定 |
 | [RAG 与配置](docs/guides/rag-and-config.md) | 检索流程、环境变量、默认模型 |
 | [题材模板](docs/guides/genres.md) | 37 个题材模板和复合题材规则 |
 | [项目结构与运维](docs/operations/operations.md) | 目录层级、健康检查、备份恢复 |
