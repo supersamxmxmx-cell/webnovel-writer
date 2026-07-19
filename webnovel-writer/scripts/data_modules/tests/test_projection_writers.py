@@ -610,3 +610,94 @@ def test_memory_projection_writer_maps_open_loop_event_into_scratchpad(tmp_path)
     loops = store.query(category="open_loop", status="active")
     assert result["applied"] is True
     assert any("三年之约" in x.subject for x in loops)
+
+
+def _loop_event(event_type, content, chapter=None, **payload_extra):
+    payload = {"content": content}
+    payload.update(payload_extra)
+    event = {"event_type": event_type, "subject": "narrator", "payload": payload}
+    if chapter is not None:
+        event["chapter"] = chapter
+    return event
+
+
+def _read_state(tmp_path):
+    return json.loads((tmp_path / ".webnovel" / "state.json").read_text(encoding="utf-8"))
+
+
+def test_state_writer_aggregates_foreshadowing_from_open_loop_events(tmp_path):
+    """issue #130：open_loop 事件必须聚合进 plot_threads.foreshadowing。"""
+    (tmp_path / ".webnovel").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".webnovel" / "state.json").write_text("{}", encoding="utf-8")
+    writer = StateProjectionWriter(tmp_path)
+
+    writer.apply(
+        _commit_payload(
+            chapter=5,
+            accepted_events=[
+                _loop_event("open_loop_created", "三年之约提及", target_chapter=30, tier="major")
+            ],
+        )
+    )
+    rows = _read_state(tmp_path)["plot_threads"]["foreshadowing"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["content"] == "三年之约提及"
+    assert row["status"] == "active"
+    assert row["planted_chapter"] == 5
+    assert row["target_chapter"] == 30
+    assert row["tier"] == "major"
+
+    writer.apply(
+        _commit_payload(
+            chapter=28,
+            accepted_events=[_loop_event("open_loop_closed", "三年之约提及")],
+        )
+    )
+    rows = _read_state(tmp_path)["plot_threads"]["foreshadowing"]
+    assert len(rows) == 1
+    assert rows[0]["status"] == "resolved"
+    assert rows[0]["resolved_chapter"] == 28
+    assert rows[0]["planted_chapter"] == 5
+
+
+def test_state_writer_foreshadowing_replay_is_idempotent(tmp_path):
+    """projections replay 重放同章不得产生重复伏笔条目。"""
+    (tmp_path / ".webnovel").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".webnovel" / "state.json").write_text("{}", encoding="utf-8")
+    writer = StateProjectionWriter(tmp_path)
+    payload = _commit_payload(
+        chapter=7,
+        accepted_events=[_loop_event("open_loop_created", "黑色棺材的来历")],
+    )
+    writer.apply(payload)
+    writer.apply(payload)
+    rows = _read_state(tmp_path)["plot_threads"]["foreshadowing"]
+    assert len(rows) == 1
+    assert rows[0]["planted_chapter"] == 7
+
+
+def test_state_writer_foreshadowing_orphan_close_keeps_record(tmp_path):
+    """closed 事件找不到对应 active 条目时保留为 resolved 记录，不丢数据。"""
+    (tmp_path / ".webnovel").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".webnovel" / "state.json").write_text("{}", encoding="utf-8")
+    writer = StateProjectionWriter(tmp_path)
+    writer.apply(
+        _commit_payload(
+            chapter=9,
+            accepted_events=[_loop_event("open_loop_closed", "从未登记过的旧约")],
+        )
+    )
+    rows = _read_state(tmp_path)["plot_threads"]["foreshadowing"]
+    assert len(rows) == 1
+    assert rows[0]["status"] == "resolved"
+    assert rows[0]["resolved_chapter"] == 9
+
+
+def test_router_routes_open_loop_events_to_state(tmp_path):
+    """issue #130：open_loop 事件必须进 state 投影，否则伏笔无人聚合。"""
+    from data_modules.event_projection_router import EventProjectionRouter
+
+    router = EventProjectionRouter()
+    assert "state" in router.route({"event_type": "open_loop_created"})
+    assert "state" in router.route({"event_type": "open_loop_closed"})
