@@ -260,7 +260,8 @@ def test_webnovel_review_skill_uses_unified_reviewer_pipeline():
     skill_text = _read_text(SKILLS_DIR / "webnovel-review" / "SKILL.md")
 
     assert "`reviewer`" in skill_text
-    assert "Use the Agent tool to run `webnovel-writer:reviewer`" in skill_text
+    assert "完整读取 `${PLUGIN_ROOT}/agents/reviewer.md`" in skill_text
+    assert "inline_fallback" in skill_text
     assert "subagent_type:" not in skill_text
     assert "review-pipeline" in skill_text
     assert ".webnovel/tmp/review_results.json" in skill_text
@@ -290,16 +291,17 @@ def test_active_skills_use_agent_tool_name_not_legacy_task():
         assert "必须通过 `Task`" not in text, f"{skill_file.parent.name}: 仍要求旧 Task 工具名"
 
 
-def test_webnovel_write_skill_uses_explicit_agent_invocation_templates():
-    """关键 subagent 必须经 Agent 工具按注册名 webnovel-writer:X 显式调用；不再用伪函数 subagent_type 块（plan §4.4.2/§8.4）。"""
+def test_webnovel_write_skill_uses_portable_agent_invocation_templates():
+    """关键代理必须加载真实指令，并为无隔离子任务的 Codex 表面定义可审计降级。"""
     text = _read_text(SKILLS_DIR / "webnovel-write" / "SKILL.md")
     fm = _extract_frontmatter(text)
 
-    assert "Agent" in fm.get("allowed-tools", "")
+    assert set(fm) == {"name", "description"}
     for subagent in ("context-agent", "reviewer", "data-agent"):
-        assert f"webnovel-writer:{subagent}" in text, f"缺少 {subagent} 的注册名显式调用"
+        assert f"${{PLUGIN_ROOT}}/agents/{subagent}.md" in text, f"缺少 {subagent} 的真实指令路径"
     assert "subagent_type:" not in text, "不应再使用伪函数 subagent_type 调用块"
-    assert "不得用主流程口头代替 subagent 输出" in text
+    assert "inline_fallback" in text
+    assert "不得用主流程口头总结代替结构化输出" in text
 
 
 @pytest.mark.parametrize("skill_name", AUTHOR_REPORT_SKILLS)
@@ -636,7 +638,8 @@ def test_webnovel_init_deconstruction_wiring_keeps_confirmation_gate():
     """init may consume only confirmed, transformed reference patterns."""
     text = _read_text(SKILLS_DIR / "webnovel-init" / "SKILL.md")
 
-    assert "Use the Agent tool to run `webnovel-writer:deconstruction-agent`" in text
+    assert "完整执行 `deconstruction-agent` 指令" in text
+    assert "inline_fallback" in text
     assert "subagent_type:" not in text
     assert "Step 1.5：灵感来源询问" in text
     assert "进入故事核采集前" in text

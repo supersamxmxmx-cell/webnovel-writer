@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文经验沉淀"
+  short_description: "把作者认可的钩子、节奏或对话模式写入项目记忆"
+  default_prompt: "使用 $webnovel-learn 记录我刚刚确认有效的写作模式。"
+policy:
+  allow_implicit_invocation: true

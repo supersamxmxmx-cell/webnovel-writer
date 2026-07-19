@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文设定查询"
+  short_description: "按时间点查询角色、关系、规则、伏笔和项目状态"
+  default_prompt: "使用 $webnovel-query 查询当前项目尚未回收的重要伏笔。"
+policy:
+  allow_implicit_invocation: true

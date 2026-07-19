@@ -1,11 +1,11 @@
 ---
 name: webnovel-learn
 description: 从当前会话提取成功写作模式并写入 project_memory.json
-allowed-tools: Read Bash
-argument-hint: "[要记住的写作经验]"
 ---
 
 # /webnovel-learn
+
+在 Codex 中执行 shell 片段前，先把 `<plugin root>` 替换为当前插件根目录的绝对路径；Claude Code 会直接提供对应宿主变量。
 
 ## Project Root Guard（必须先确认）
 
@@ -14,8 +14,11 @@ argument-hint: "[要记住的写作经验]"
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT:?}/scripts"
-export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+export PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-<plugin root>}"
+export SCRIPTS_DIR="${PLUGIN_ROOT}/scripts"
+export PYTHON_BIN="${PYTHON_BIN:-python3}"
+export PYTHONPATH="${SCRIPTS_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+export PROJECT_ROOT="$("${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
 ## 目标
@@ -29,7 +32,7 @@ export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-roo
 3. 调用 `project-memory add-pattern` 写入，不得手写或拼接 JSON：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" project-memory add-pattern \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" project-memory add-pattern \
   --pattern-type "{pattern_type}" \
   --description "{用户输入或提炼后的完整描述}" \
   --category "{分类，可空}" \

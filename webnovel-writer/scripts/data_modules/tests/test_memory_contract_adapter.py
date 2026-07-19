@@ -428,3 +428,72 @@ class TestCommitChapter:
         assert (tmp_path / ".story-system" / "commits" / "chapter_003.commit.json").is_file()
         assert result.chapter == 3
         assert "commit_status=accepted" in result.warnings
+
+
+class TestLoadContextAuthorStyle:
+    """issue #131：load_context 必须消费 project_memory.json 与 风格契约.md。"""
+
+    def _write_memory(self, tmp_path: Path, patterns) -> None:
+        (tmp_path / ".webnovel" / "project_memory.json").write_text(
+            json.dumps({"patterns": patterns}, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def test_author_style_patterns_present(self, tmp_path):
+        cfg = _make_project(tmp_path)
+        self._write_memory(
+            tmp_path,
+            [
+                {
+                    "pattern_type": "写作风格",
+                    "description": "禁止“有什么东西”等模糊指代。",
+                    "source_chapter": 1,
+                    "importance": "5",
+                },
+                {
+                    "pattern_type": "节奏",
+                    "description": "开篇三段内必须进入冲突。",
+                    "importance": "low",
+                },
+            ],
+        )
+        pack = MemoryContractAdapter(cfg).load_context(chapter=3)
+        section = pack.sections.get("author_style_patterns")
+        assert section, "load_context 未返回 author_style_patterns（issue #131 主诉）"
+        assert any("模糊指代" in str(p.get("description", "")) for p in section)
+
+    def test_patterns_sorted_by_importance_and_capped(self, tmp_path):
+        cfg = _make_project(tmp_path)
+        patterns = [
+            {"pattern_type": "低", "description": f"低优先级规则{i}", "importance": "low"}
+            for i in range(12)
+        ]
+        patterns.append(
+            {"pattern_type": "高", "description": "最重要的规则", "importance": "5"}
+        )
+        self._write_memory(tmp_path, patterns)
+        pack = MemoryContractAdapter(cfg).load_context(chapter=2)
+        section = pack.sections["author_style_patterns"]
+        assert len(section) <= 10, "patterns 未按 token 预算截断"
+        assert section[0]["description"] == "最重要的规则", "高重要度未排在前面"
+
+    def test_style_contract_present(self, tmp_path):
+        cfg = _make_project(tmp_path)
+        settings = tmp_path / "设定集"
+        settings.mkdir(exist_ok=True)
+        (settings / "风格契约.md").write_text("短句为主，少用成语。", encoding="utf-8")
+        pack = MemoryContractAdapter(cfg).load_context(chapter=2)
+        assert "短句为主" in str(pack.sections.get("style_contract", ""))
+
+    def test_absent_files_sections_omitted(self, tmp_path):
+        cfg = _make_project(tmp_path)
+        pack = MemoryContractAdapter(cfg).load_context(chapter=2)
+        assert "author_style_patterns" not in pack.sections
+        assert "style_contract" not in pack.sections
+
+    def test_malformed_memory_does_not_crash(self, tmp_path):
+        cfg = _make_project(tmp_path)
+        (tmp_path / ".webnovel" / "project_memory.json").write_text(
+            "{broken json", encoding="utf-8"
+        )
+        pack = MemoryContractAdapter(cfg).load_context(chapter=2)
+        assert "author_style_patterns" not in pack.sections

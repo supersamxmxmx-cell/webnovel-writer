@@ -110,6 +110,50 @@ def _check_manifest(root: Path, issues: list[dict[str, str]]) -> tuple[str, str]
     return name, version
 
 
+def _check_codex_manifest(root: Path, plugin_version: str, issues: list[dict[str, str]]) -> None:
+    plugin_json = _plugin_root(root) / ".codex-plugin" / "plugin.json"
+    payload, error = _load_json(plugin_json)
+    if error:
+        issues.append(
+            _issue(
+                "manifest.codex_plugin_json",
+                message=error,
+                path=str(plugin_json),
+                repair="恢复 .codex-plugin/plugin.json。",
+            )
+        )
+        return
+    name = str(payload.get("name") or "")
+    version = str(payload.get("version") or "")
+    if name != PLUGIN_NAME:
+        issues.append(
+            _issue(
+                "manifest.codex_name",
+                message=f"unexpected Codex plugin name: {name}",
+                path=str(plugin_json),
+                repair=f"Codex 插件名应为 {PLUGIN_NAME}。",
+            )
+        )
+    if not SEMVER_RE.fullmatch(version):
+        issues.append(
+            _issue(
+                "manifest.codex_version",
+                message=f"invalid semver: {version}",
+                path=str(plugin_json),
+                repair="使用 X.Y.Z 版本号。",
+            )
+        )
+    elif plugin_version and version != plugin_version:
+        issues.append(
+            _issue(
+                "version.codex_manifest",
+                message=f"Claude plugin.json={plugin_version}, Codex plugin.json={version}",
+                path=str(plugin_json),
+                repair="运行 sync_plugin_version.py --version X.Y.Z --release-notes ...。",
+            )
+        )
+
+
 def _check_marketplace(root: Path, plugin_version: str, issues: list[dict[str, str]]) -> None:
     marketplace = _repo_root(root) / ".claude-plugin" / "marketplace.json"
     payload, error = _load_json(marketplace)
@@ -235,6 +279,7 @@ def validate_package(root: str | Path | None = None, *, strict: bool = False) ->
     repo_root = Path(root) if root is not None else Path(__file__).resolve().parent.parent.parent
     issues: list[dict[str, str]] = []
     _, plugin_version = _check_manifest(repo_root, issues)
+    _check_codex_manifest(repo_root, plugin_version, issues)
     _check_marketplace(repo_root, plugin_version, issues)
     _check_readme_version(repo_root, plugin_version, issues)
     _check_frontmatter(repo_root, issues)

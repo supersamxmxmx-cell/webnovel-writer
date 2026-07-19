@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文项目初始化"
+  short_description: "分阶段收集设定并生成可规划写作的新书项目骨架"
+  default_prompt: "使用 $webnovel-init 初始化一部新网文，并先收集我的创作要求。"
+policy:
+  allow_implicit_invocation: true

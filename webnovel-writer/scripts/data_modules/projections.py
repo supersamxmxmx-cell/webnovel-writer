@@ -36,9 +36,11 @@ def _read_commit(path: Path) -> tuple[dict[str, Any], str]:
         return {}, f"read_error:{exc}"
     if not isinstance(payload, dict):
         return {}, "commit_not_object"
-    payload.setdefault("projection_status", dict(DEFAULT_PROJECTION_STATUS))
+    projection_status = payload.setdefault("projection_status", dict(DEFAULT_PROJECTION_STATUS))
+    if not isinstance(projection_status, dict):
+        return {}, "projection_status_not_object"
     for key, value in DEFAULT_PROJECTION_STATUS.items():
-        payload["projection_status"].setdefault(key, value)
+        projection_status.setdefault(key, value)
     return payload, ""
 
 

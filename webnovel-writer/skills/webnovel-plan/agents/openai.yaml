@@ -1,0 +1,6 @@
+interface:
+  display_name: "网文卷纲规划"
+  short_description: "生成卷节拍、时间线、详细章纲并刷新写作合同"
+  default_prompt: "使用 $webnovel-plan 为当前网文项目规划下一卷。"
+policy:
+  allow_implicit_invocation: true

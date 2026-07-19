@@ -1,11 +1,11 @@
 ---
 name: webnovel-review
 description: 使用审查 Agent 评估章节质量，生成报告并写回审查指标。
-allowed-tools: Read Grep Write Edit Bash Agent AskUserQuestion
-argument-hint: "[章号或范围，如 5 或 1-5]"
 ---
 
 # Quality Review Skill
+
+在 Codex 中执行 shell 片段前，先把 `<plugin root>` 替换为当前插件根目录的绝对路径；Claude Code 会直接提供对应宿主变量。
 
 ## 目标
 
@@ -15,7 +15,7 @@ argument-hint: "[章号或范围，如 5 或 1-5]"
 
 ## 红线
 
-- 必须通过 `Agent` 工具调用 `reviewer`，禁止主流程伪造结论或口头总结代替 subagent 输出。
+- 必须完整执行 `reviewer` 指令：宿主规则允许时使用隔离子任务，否则内联执行并明确记录降级；禁止伪造结论或用口头总结代替结构化输出。
 - reviewer 只返回严格 JSON；主流程负责把返回值写入 `${PROJECT_ROOT}/.webnovel/tmp/review_results.json`，随后由 `review-pipeline` 覆盖为标准 review_result artifact。
 - 报告与 metrics 只由 `review-pipeline --save-metrics` 产出；主流程不伪造 `overall_score`。
 - 项目根不合法 / 缺 `.webnovel/state.json` / 缺待审正文 → 阻断。
@@ -26,8 +26,12 @@ argument-hint: "[章号或范围，如 5 或 1-5]"
 
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
-export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+export PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-<plugin root>}"
+export SCRIPTS_DIR="${PLUGIN_ROOT}/scripts"
+export SKILL_ROOT="${PLUGIN_ROOT}/skills/webnovel-review"
+export PYTHON_BIN="${PYTHON_BIN:-python3}"
+export PYTHONPATH="${SCRIPTS_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+export PROJECT_ROOT="$("${PYTHON_BIN}" "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
 `PROJECT_ROOT` 必须包含 `.webnovel/state.json`，否则阻断。
@@ -37,9 +41,9 @@ export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WOR
 目标章缺 runtime 合同时，先用详细大纲的真实本章目标刷新（`CHAPTER_GOAL` 禁止 `{章纲目标}` / `第N章章纲目标` 占位文本）：
 
 ```bash
-GENRE="$(python -X utf8 -c "import json; s=json.load(open('${PROJECT_ROOT}/.webnovel/state.json',encoding='utf-8')); pi=s.get('project_info',{}); print(pi.get('genre') or s.get('project',{}).get('genre',''))")"
+GENRE="$("${PYTHON_BIN}" -X utf8 -c "import json; s=json.load(open('${PROJECT_ROOT}/.webnovel/state.json',encoding='utf-8')); pi=s.get('project_info',{}); print(pi.get('genre') or s.get('project',{}).get('genre',''))")"
 
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
   story-system "${CHAPTER_GOAL}" --genre "${GENRE}" --chapter {chapter_num} --persist --emit-runtime-contracts --format both
 ```
 
@@ -63,10 +67,10 @@ cat "${PROJECT_ROOT}/.webnovel/state.json"
 
 ### Step 5：调用统一审查 Agent
 
-必须通过 `Agent` 工具调用 `reviewer`。审查方法与维度细则由 reviewer 自带，本 Skill 不展开。
+必须完整读取 `${PLUGIN_ROOT}/agents/reviewer.md` 并执行 reviewer。审查方法与维度细则由 reviewer 自带，本 Skill 不展开。
 
 ```text
-Use the Agent tool to run `webnovel-writer:reviewer`.
+宿主规则允许隔离子任务时，使用 reviewer 指令运行独立审查任务；否则按同一指令内联执行，并在 `SubagentRun` 中记录 `inline_fallback`。
 
 Prompt: chapter={chapter_num}; chapter_file={chapter_file}; project_root=${PROJECT_ROOT}; scripts_dir=${SCRIPTS_DIR}。严格输出 reviewer schema JSON，不评分，不口头总结。
 ```
@@ -93,7 +97,7 @@ reviewer 跳过、失败、输出不完整、正文为空、维度跳过、block
 ### Step 6：生成报告并落库
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" review-pipeline \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" review-pipeline \
   --chapter {chapter_num} \
   --review-results "${PROJECT_ROOT}/.webnovel/tmp/review_results.json" \
   --metrics-out "${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json" \
@@ -106,14 +110,14 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rev
 ### Step 7：写入兼容审查记录
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" update-state -- --add-review "{chapter_num}-{chapter_num}" "审查报告/第{chapter_num}章审查报告.md"
+"${PYTHON_BIN}" "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" update-state -- --add-review "{chapter_num}-{chapter_num}" "审查报告/第{chapter_num}章审查报告.md"
 ```
 
 兼容投影 / read model，不是写后事实真源。
 
 ### Step 8：处理阻断
 
-存在任意 `blocking=true` 问题时，用 `AskUserQuestion` 让用户裁决：
+存在任意 `blocking=true` 问题时，直接让用户裁决：
 
 - 立即修复：输出返工清单，仅在用户明确授权下做最小修改。
 - 仅保存报告，稍后处理：保留报告与指标记录，结束流程。
@@ -131,7 +135,7 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" update-stat
 审查开始前先说明本次会经历：定位待审正文 -> 刷新缺失合同 -> 写作检查 -> 生成报告和指标 -> 处理阻断裁决。过程提示用作者语言，不直接输出原始 JSON、traceback 或长命令日志；技术详情写入 `.webnovel/logs/run_last.log`：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" run-log \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" run-log \
   --event review-progress \
   --payload-json "{\"stage\": \"review\", \"chapter\": {chapter_num}}" \
   --format text
@@ -144,7 +148,7 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" run
 不可恢复故障才在最终报告提示 `.webnovel/logs/run_last.log`；平时只保留日志，不打扰作者。收尾必须调用作者报告 helper：
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" user-report \
+"${PYTHON_BIN}" -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" user-report \
   --stage review \
   --chapter {chapter_num} \
   --format text

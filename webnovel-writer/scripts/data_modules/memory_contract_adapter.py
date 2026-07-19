@@ -7,6 +7,7 @@ MemoryContractAdapter——薄适配器，包装现有模块满足 MemoryContrac
 """
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -251,11 +252,86 @@ class MemoryContractAdapter:
         except Exception as e:
             logger.warning("load_context: genre_profile_excerpt failed: %s", e)
 
+        # 8. 作者文风记忆（/webnovel-learn 写入的 project_memory.json）
+        try:
+            patterns = self._load_author_style_patterns()
+            if patterns:
+                sections["author_style_patterns"] = patterns
+        except Exception as e:
+            logger.warning("load_context: author_style_patterns failed: %s", e)
+
+        # 9. 风格契约（设定集/风格契约.md，作者手写的文风约定）
+        try:
+            contract = self._load_style_contract()
+            if contract:
+                sections["style_contract"] = contract
+        except Exception as e:
+            logger.warning("load_context: style_contract failed: %s", e)
+
         return ContextPack(
             chapter=chapter,
             sections=sections,
             budget_used_tokens=0,
         )
+
+    _STYLE_PATTERNS_LIMIT = 10
+    _STYLE_PATTERN_DESC_MAX_CHARS = 200
+    _STYLE_CONTRACT_MAX_CHARS = 2000
+
+    @staticmethod
+    def _importance_weight(value: Any) -> float:
+        """importance 归一为数值权重（越大越重要）；兼容命名档位与数字字符串。"""
+        named = {
+            "critical": 5.0,
+            "highest": 5.0,
+            "high": 4.0,
+            "medium": 3.0,
+            "normal": 3.0,
+            "low": 2.0,
+            "lowest": 1.0,
+        }
+        raw = str(value if value is not None else "").strip().lower()
+        if raw in named:
+            return named[raw]
+        try:
+            return float(raw)
+        except ValueError:
+            return named["medium"]
+
+    def _load_author_style_patterns(self) -> List[Dict[str, Any]]:
+        memory_path = self.config.webnovel_dir / "project_memory.json"
+        if not memory_path.exists():
+            return []
+        try:
+            data = json.loads(memory_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            logger.warning("project_memory.json 解析失败，跳过: %s", e)
+            return []
+        patterns = data.get("patterns") if isinstance(data, dict) else None
+        if not isinstance(patterns, list):
+            return []
+        valid = [p for p in patterns if isinstance(p, dict) and str(p.get("description", "")).strip()]
+        valid.sort(key=lambda p: self._importance_weight(p.get("importance")), reverse=True)
+        result = []
+        for p in valid[: self._STYLE_PATTERNS_LIMIT]:
+            item: Dict[str, Any] = {
+                "pattern_type": str(p.get("pattern_type", "other")),
+                "description": str(p["description"])[: self._STYLE_PATTERN_DESC_MAX_CHARS],
+            }
+            if p.get("source_chapter") is not None:
+                item["source_chapter"] = p["source_chapter"]
+            result.append(item)
+        return result
+
+    def _load_style_contract(self) -> str:
+        path = self.config.settings_dir / "风格契约.md"
+        if not path.exists():
+            matches = sorted(self.config.settings_dir.glob("*风格契约*.md")) if self.config.settings_dir.exists() else []
+            if not matches:
+                return ""
+            path = matches[0]
+        text = path.read_text(encoding="utf-8").strip()
+        return text[: self._STYLE_CONTRACT_MAX_CHARS]
 
     def query_entity(self, entity_id: str) -> Optional[EntitySnapshot]:
         try:

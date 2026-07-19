@@ -64,6 +64,17 @@ export function FolderIcon(props) {
     )
 }
 
+export function MilestoneIcon(props) {
+    return (
+        <IconBase {...props}>
+            <rect x="4" y="3" width="2" height="18" />
+            <rect x="6" y="4" width="13" height="8" />
+            <polygon points="15,8 21,12 15,16" />
+            <rect x="3" y="19" width="7" height="2" />
+        </IconBase>
+    )
+}
+
 export function SlidersIcon(props) {
     return (
         <IconBase {...props}>

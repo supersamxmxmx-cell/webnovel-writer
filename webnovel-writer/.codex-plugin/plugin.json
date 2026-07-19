@@ -1,0 +1,38 @@
+{
+  "name": "webnovel-writer",
+  "version": "6.2.3",
+  "description": "面向长篇连载的网文创作系统：初始化设定、规划卷纲、写章、审查、记忆沉淀和状态查询。",
+  "author": {
+    "name": "lingfengQAQ"
+  },
+  "homepage": "https://github.com/supersamxmxmx-cell/webnovel-writer",
+  "repository": "https://github.com/supersamxmxmx-cell/webnovel-writer",
+  "license": "GPL-3.0",
+  "keywords": [
+    "webnovel",
+    "fiction-writing",
+    "story-planning",
+    "rag",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Webnovel Writer",
+    "shortDescription": "长篇网文连载的规划、写作、审查与一致性管理工作流",
+    "longDescription": "在 Codex 中运行的长篇网文创作工作流，保留 Story System、章节提交链、长期记忆、质量审查和只读 Dashboard。",
+    "developerName": "lingfengQAQ",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/supersamxmxmx-cell/webnovel-writer",
+    "defaultPrompt": [
+      "初始化一部玄幻长篇网文，并先帮我收集设定。",
+      "规划第 2 卷，检查时间线和伏笔能否承接。",
+      "根据第 12 章章纲写正文并完成审查和事实提交。"
+    ],
+    "brandColor": "#4F46E5"
+  }
+}

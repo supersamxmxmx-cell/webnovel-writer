@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>里程一览 Demo · 末世：从给人分配职业开始</title>
+  <style>
+    :root {
+      --ink: #28210f;
+      --muted: #746849;
+      --soft: #9b8d67;
+      --paper: #fffdf5;
+      --cream: #fff6dd;
+      --sand: #ffe9b4;
+      --sky: #33aaf6;
+      --sky-soft: #dbf2ff;
+      --violet: #7655e8;
+      --violet-soft: #eee7ff;
+      --green: #2ab978;
+      --green-soft: #ddf7e9;
+      --amber: #f3a91e;
+      --amber-soft: #fff0c9;
+      --red: #d63b4d;
+      --red-soft: #ffe3e7;
+      --shadow: 6px 6px 0 var(--ink);
+      --shadow-small: 3px 3px 0 var(--ink);
+      --display: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+      --body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background-color: #fff8e9;
+      background-image:
+        linear-gradient(90deg, rgba(40, 33, 15, .055) 1px, transparent 1px),
+        linear-gradient(rgba(40, 33, 15, .055) 1px, transparent 1px);
+      background-size: 14px 14px;
+      font-family: var(--body);
+      line-height: 1.55;
+    }
+
+    button, summary { font: inherit; }
+    button, summary { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, summary:focus-visible {
+      outline: 3px dashed var(--sky);
+      outline-offset: 3px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 238px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      border-right: 3px solid var(--ink);
+      background: linear-gradient(180deg, #ffebb9 0%, #ffe19e 100%);
+    }
+
+    .brand {
+      padding: 18px 16px;
+      border-bottom: 3px solid var(--ink);
+    }
+
+    .brand strong {
+      display: block;
+      font-family: var(--display);
+      font-size: 14px;
+      letter-spacing: .08em;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 10px;
+      overflow: hidden;
+      color: #5d5135;
+      font-size: 13px;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    nav {
+      display: grid;
+      gap: 8px;
+      padding: 12px 10px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+      border: 2px solid var(--ink);
+      background: #fff9e9;
+      box-shadow: var(--shadow-small);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 750;
+      padding: 8px 11px;
+      text-decoration: none;
+    }
+
+    .nav-item.active {
+      border-color: #178fd9;
+      background: var(--sky-soft);
+    }
+
+    .nav-icon {
+      display: grid;
+      place-items: center;
+      width: 21px;
+      height: 21px;
+      flex: 0 0 21px;
+      border: 2px solid currentColor;
+      font-family: var(--display);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .sync {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: auto;
+      border-top: 3px solid var(--ink);
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .sync-dot {
+      width: 11px;
+      height: 11px;
+      border: 2px solid var(--ink);
+      background: var(--green);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+
+    main {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    .page {
+      display: grid;
+      gap: 18px;
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      letter-spacing: -.03em;
+    }
+
+    .eyebrow {
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-family: var(--display);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .13em;
+    }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .pixel-button {
+      min-height: 38px;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      box-shadow: var(--shadow-small);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 750;
+      padding: 6px 11px;
+    }
+
+    .pixel-button:hover { background: var(--sky-soft); transform: translate(-1px, -1px); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 29px;
+      border: 2px solid var(--ink);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
+    .blue { background: var(--sky-soft); color: #075f90; }
+    .green { background: var(--green-soft); color: #11583b; }
+    .purple { background: var(--violet-soft); color: #4c35a5; }
+    .amber { background: var(--amber-soft); color: #7a4f00; }
+    .red { background: var(--red-soft); color: #912737; }
+    .neutral { background: #fffef8; }
+
+    .demo-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 2px solid var(--ink);
+      background: var(--violet-soft);
+      box-shadow: var(--shadow-small);
+      padding: 10px 12px;
+      color: #4b3b83;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .demo-note strong { color: var(--ink); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      border: 3px solid var(--ink);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .stat-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 148px;
+      padding: 16px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .stat-value {
+      margin: 6px 0 2px;
+      color: var(--sky);
+      font-size: clamp(27px, 3vw, 38px);
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.12;
+    }
+
+    .stat-sub {
+      margin-top: auto;
+      color: #5f5439;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .type-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 12px 0;
+    }
+
+    details > summary {
+      list-style: none;
+      cursor: pointer;
+    }
+
+    details > summary::-webkit-details-marker { display: none; }
+
+    .volume { overflow: hidden; }
+    .volume.current { border-color: var(--amber); box-shadow: 6px 6px 0 #8d6207; }
+
+    .volume-summary,
+    .stage-summary,
+    .chapter-summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .volume-summary {
+      min-height: 94px;
+      padding: 16px;
+      background: var(--paper);
+    }
+
+    .volume-summary:hover,
+    .stage-summary:hover,
+    .chapter-summary:hover { background: #fff0cc; }
+
+    .toggle {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      border: 2px solid var(--ink);
+      background: #fff;
+      box-shadow: 2px 2px 0 var(--ink);
+      font-family: var(--display);
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    details > summary .toggle::before { content: "+"; }
+    details[open] > summary .toggle::before { content: "−"; }
+
+    .summary-main {
+      display: grid;
+      min-width: 0;
+      flex: 1;
+      gap: 3px;
+    }
+
+    .summary-main strong { font-size: 17px; }
+    .summary-main small { color: var(--muted); font-size: 13px; font-weight: 650; }
+
+    .volume-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .progress-number {
+      display: grid;
+      flex: 0 0 auto;
+      text-align: right;
+    }
+
+    .progress-number strong { color: var(--sky); font-size: 24px; line-height: 1.2; }
+    .progress-number small { color: var(--muted); font-weight: 750; }
+
+    .progress-track {
+      height: 14px;
+      border-top: 2px solid var(--ink);
+      border-bottom: 2px solid var(--ink);
+      background: #f6deb0;
+    }
+
+    .progress-fill {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--sky), var(--violet));
+    }
+
+    .volume-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-height: 48px;
+      border-bottom: 2px solid var(--soft);
+      background: var(--cream);
+      padding: 8px 16px;
+    }
+
+    .mini-label {
+      color: var(--muted);
+      font-family: var(--display);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .stage-list {
+      display: grid;
+      gap: 13px;
+      background: #ffedc3;
+      padding: 14px;
+    }
+
+    .stage {
+      overflow: hidden;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      box-shadow: var(--shadow-small);
+    }
+
+    .stage.current-stage { border-color: var(--sky); }
+
+    .stage-summary {
+      min-height: 68px;
+      background: #fffaf0;
+      padding: 11px 12px;
+    }
+
+    .summary-badges {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .chapter-list {
+      display: grid;
+      gap: 8px;
+      border-top: 2px solid var(--ink);
+      background: #fff5dc;
+      padding: 10px;
+    }
+
+    .chapter {
+      overflow: hidden;
+      border: 2px solid #8f805c;
+      background: #fff;
+    }
+
+    .chapter.current-chapter { border-color: var(--sky); box-shadow: inset 5px 0 0 var(--sky); }
+    .chapter.planned { border-style: dashed; }
+    .chapter.planned[open] { border-color: var(--amber); }
+
+    [data-planned-range] {
+      display: grid;
+      gap: 8px;
+    }
+
+    .chapter-summary {
+      min-height: 57px;
+      padding: 9px 11px;
+      background: #fffef9;
+    }
+
+    .chapter-summary .summary-main strong { font-size: 15px; }
+
+    .chapter-details {
+      display: grid;
+      gap: 15px;
+      border-top: 2px dashed var(--soft);
+      background: #fffdf6;
+      padding: 14px;
+    }
+
+    .chapter-details p { margin: 5px 0 0; color: #554b34; font-size: 13px; }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .detail-box {
+      border: 2px solid #d3c5a4;
+      background: #fff8e8;
+      padding: 10px;
+    }
+
+    .entity-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .entity {
+      display: inline-flex;
+      align-items: stretch;
+      overflow: hidden;
+      border: 2px solid var(--ink);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .entity-type {
+      display: inline-flex;
+      align-items: center;
+      border-right: 2px solid var(--ink);
+      background: var(--violet-soft);
+      color: #4d35a6;
+      padding: 3px 6px;
+    }
+
+    .entity-name { padding: 3px 7px; }
+    .entity.ability .entity-type { background: var(--sky-soft); color: #09628f; }
+    .entity.item .entity-type { background: var(--amber-soft); color: #795000; }
+
+    .changes {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .change {
+      border-left: 5px solid var(--violet);
+      background: var(--violet-soft);
+      padding: 9px 11px;
+    }
+
+    .change-heading {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+
+    .change-field { color: var(--muted); font-family: var(--display); font-size: 11px; }
+
+    .change-values {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 7px;
+      color: #55428f;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .change-values code {
+      overflow: hidden;
+      max-width: 44%;
+      border: 1px solid #bcaee7;
+      background: #fff;
+      padding: 3px 6px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .planned-chapter {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 57px;
+      border: 2px dashed var(--soft);
+      background: #fffaf0;
+      padding: 9px 11px;
+    }
+
+    .planned-icon {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      border: 2px dashed var(--soft);
+      color: var(--muted);
+      font-family: var(--display);
+      font-weight: 900;
+    }
+
+    .muted { color: var(--muted); }
+
+    .future-volume .volume-summary { background: #fffaf0; }
+    .future-volume .progress-number strong { color: var(--soft); }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (max-width: 1160px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 820px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; border-right: 0; border-bottom: 3px solid var(--ink); }
+      .brand { padding: 13px 15px; }
+      nav { display: flex; overflow-x: auto; }
+      .nav-item { min-width: 136px; }
+      .sync { display: none; }
+      main { padding: 16px; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .summary-grid { grid-template-columns: 1fr; }
+      .stat-card { min-height: 120px; }
+      .volume-summary, .stage-summary, .chapter-summary { align-items: flex-start; flex-wrap: wrap; }
+      .summary-main { flex-basis: calc(100% - 44px); }
+      .progress-number, .summary-badges { width: 100%; margin-left: 42px; justify-content: flex-start; text-align: left; }
+      .change-values code { max-width: 42%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>PIXEL WRITER HUB</strong>
+        <span title="末世：从给人分配职业开始">《末世：从给人分配职业开始》</span>
+      </div>
+      <nav aria-label="看板导航">
+        <a class="nav-item" href="#"><span class="nav-icon">▦</span>总览</a>
+        <a class="nav-item" href="#"><span class="nav-icon">▣</span>角色图鉴</a>
+        <a class="nav-item" href="#"><span class="nav-icon">∿</span>节奏雷达</a>
+        <a class="nav-item" href="#"><span class="nav-icon">▪</span>伏笔追踪</a>
+        <a class="nav-item" href="#"><span class="nav-icon">■</span>文档浏览</a>
+        <a class="nav-item active" href="#milestones" aria-current="page"><span class="nav-icon">⚑</span>里程一览</a>
+        <a class="nav-item" href="#"><span class="nav-icon">≡</span>系统状态</a>
+      </nav>
+      <div class="sync"><span class="sync-dot"></span>静态 Demo · 只读</div>
+    </aside>
+
+    <main id="milestones">
+      <div class="page">
+        <header class="page-header">
+          <div>
+            <div class="eyebrow">STORY MILESTONES</div>
+            <div class="title-row">
+              <h1>里程一览</h1>
+              <span class="badge blue">当前 第 9 章</span>
+              <span class="badge green">数据已验收</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="pixel-button" id="expand-all" type="button">全部展开</button>
+            <button class="pixel-button" id="collapse-all" type="button">全部收起</button>
+          </div>
+        </header>
+
+        <div class="demo-note">
+          <span class="badge purple">DEMO</span>
+          <span><strong>使用真实书项目数据：</strong>已写 9 章，第 1 卷规划的 50 章已全部带出；阶段名、章名和每章细纲来自《第1卷-详细大纲》。点击卷、阶段或章节即可逐级展开。</span>
+        </div>
+
+        <section class="summary-grid" aria-label="里程摘要">
+          <article class="card stat-card">
+            <div class="stat-label">当前卷进度</div>
+            <div class="stat-value">18.0%</div>
+            <div class="stat-sub">第 1 卷《末日第一天》 · 9 / 50 章</div>
+          </article>
+          <article class="card stat-card">
+            <div class="stat-label">当前阶段</div>
+            <div class="stat-value">觉醒</div>
+            <div class="stat-sub">阶段一 · 第 1–10 章 · 尚差 1 章</div>
+          </article>
+          <article class="card stat-card">
+            <div class="stat-label">实体总数</div>
+            <div class="stat-value">19</div>
+            <div class="stat-sub">索引库中的人物、物品、地点与势力</div>
+          </article>
+          <article class="card stat-card">
+            <div class="stat-label">实体 / 能力进展</div>
+            <div class="type-row">
+              <span class="badge purple">角色 10</span>
+              <span class="badge amber">物品 4</span>
+              <span class="badge green">地点 4</span>
+              <span class="badge blue">能力线 3</span>
+            </div>
+            <div class="stat-sub">能力线根据章节状态变化汇总</div>
+          </article>
+        </section>
+
+        <section aria-label="卷阶段与章节进展">
+          <details class="card volume current" open>
+            <summary class="volume-summary">
+              <span class="toggle" aria-hidden="true"></span>
+              <span class="summary-main">
+                <span class="volume-title"><strong>第 1 卷 · 末日第一天</strong><span class="badge amber">当前卷</span></span>
+                <small>第 1–50 章 · 觉醒 GM 权限，拉起第一支契约小队</small>
+              </span>
+              <span class="progress-number"><strong>18.0%</strong><small>9 / 50 章</small></span>
+            </summary>
+            <div class="progress-track" aria-label="第一卷完成 18%"><span class="progress-fill" style="width:18%"></span></div>
+            <div class="volume-meta">
+              <span class="mini-label">本卷已出现</span>
+              <span class="badge purple">角色 · 李小风 / 林越 / 苏晴</span>
+              <span class="badge amber">物品 · GM权限 / 晶核</span>
+              <span class="badge blue">能力 · 构装·急造 / 固本·速愈</span>
+            </div>
+
+            <div class="stage-list">
+              <details class="stage current-stage" open>
+                <summary class="stage-summary">
+                  <span class="toggle" aria-hidden="true"></span>
+                  <span class="summary-main">
+                    <strong>阶段一 · 觉醒</strong>
+                    <small>第 1–10 章 · 末世第 1 天全天</small>
+                  </span>
+                  <span class="summary-badges">
+                    <span class="badge blue">9 / 10 章</span>
+                    <span class="badge purple">3 条能力线</span>
+                    <span class="badge amber">尚差 1 章</span>
+                  </span>
+                </summary>
+
+                <div class="chapter-list">
+                  <details class="chapter">
+                    <summary class="chapter-summary">
+                      <span class="toggle" aria-hidden="true"></span>
+                      <span class="summary-main"><strong>第 1 章 · 全世界都在变强，只有我是管理员</strong><small>2,101 字 · 5 个实体 · 核心能力觉醒</small></span>
+                      <span class="badge green">已验收</span>
+                    </summary>
+                    <div class="chapter-details">
+                      <section><div class="mini-label">CHAPTER SUMMARY</div><p>全球职业觉醒，李小风却只获得「GM权限」，等级永久锁死在 1 级；面对围抢他水的幸存者，系统提示可为他们分配职业。</p></section>
+                      <div class="detail-grid">
+                        <div class="detail-box"><div class="mini-label">首次出现</div><div class="entity-list"><span class="entity"><span class="entity-type">角色</span><span class="entity-name">李小风 ★</span></span><span class="entity item"><span class="entity-type">能力</span><span class="entity-name">GM 权限</span></span></div></div>
+                        <div class="detail-box"><div class="mini-label">关键变化</div><p>「未觉醒」→「GM权限」，等级锁死 1，经验 0/0。</p></div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary">
+                      <span class="toggle" aria-hidden="true"></span>
+                      <span class="summary-main"><strong>第 2 章 · 签下第一个人</strong><small>2,209 字 · 契约名额 3 → 2 · 新能力 1</small></span>
+                      <span class="badge green">已验收</span>
+                    </summary>
+                    <div class="chapter-details">
+                      <section><div class="mini-label">CHAPTER SUMMARY</div><p>李小风没选最强的战士，而是选择不会背叛的工匠林越，解锁「构装·急造」，用临时工事挡住尸群。</p></section>
+                      <div class="detail-grid">
+                        <div class="detail-box"><div class="mini-label">参与实体</div><div class="entity-list"><span class="entity"><span class="entity-type">角色</span><span class="entity-name">李小风</span></span><span class="entity"><span class="entity-type">角色</span><span class="entity-name">林越</span></span><span class="entity ability"><span class="entity-type">能力</span><span class="entity-name">构装·急造</span></span></div></div>
+                        <div class="detail-box"><div class="mini-label">里程节点</div><p>第一份自愿契约完成，「废职业」首次兑现战术价值。</p></div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary"><span class="toggle" aria-hidden="true"></span><span class="summary-main"><strong>第 3 章 · 职业搭配，破局写字楼</strong><small>2,702 字 · 林越职业升至 2 级 · 晶核首现</small></span><span class="badge green">已验收</span></summary>
+                    <div class="chapter-details"><section><div class="mini-label">CHAPTER SUMMARY</div><p>小队杀穿尸群，获得全书第一颗晶核；林越升级，李小风却再次确认自己无法变强。</p></section><div class="entity-list"><span class="entity item"><span class="entity-type">物品</span><span class="entity-name">晶核</span></span><span class="entity ability"><span class="entity-type">能力</span><span class="entity-name">工匠·2级</span></span></div></div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary"><span class="toggle" aria-hidden="true"></span><span class="summary-main"><strong>第 4 章 · 逃出生天</strong><small>2,456 字 · 四人队缩为二人 · 信任加深</small></span><span class="badge green">已验收</span></summary>
+                    <div class="chapter-details"><p>李小风识破两名临时队友的夺权倾向，与林越突围写字楼，进入已化为尸海的城市。</p></div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary"><span class="toggle" aria-hidden="true"></span><span class="summary-main"><strong>第 5 章 · 末世的规则</strong><small>2,527 字 · 确立「绝不暴露 GM 身份」</small></span><span class="badge green">已验收</span></summary>
+                    <div class="chapter-details"><p>两人烧掉最后补给引开进化丧尸，李小风开始归纳晶核、职业和资源规则。</p></div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary"><span class="toggle" aria-hidden="true"></span><span class="summary-main"><strong>第 6 章 · 废职业也能翻身</strong><small>2,578 字 · 第二份契约 · 新队友苏晴</small></span><span class="badge green">已验收</span></summary>
+                    <div class="chapter-details">
+                      <div class="detail-grid">
+                        <div class="detail-box"><div class="mini-label">新增人物</div><div class="entity-list"><span class="entity"><span class="entity-type">角色</span><span class="entity-name">苏晴</span></span></div></div>
+                        <div class="detail-box"><div class="mini-label">新增能力</div><div class="entity-list"><span class="entity ability"><span class="entity-type">能力</span><span class="entity-name">固本·速愈</span></span></div></div>
+                      </div>
+                    </div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary"><span class="toggle" aria-hidden="true"></span><span class="summary-main"><strong>第 7 章 · 这片地界，有人说了算</strong><small>2,464 字 · 新对手胖三 / 赵猛 · 潜伏开始</small></span><span class="badge green">已验收</span></summary>
+                    <div class="chapter-details"><p>小队被赵猛团伙抓入苦力队，李小风选择示弱潜伏，暗中筛选可以改命的新成员。</p></div>
+                  </details>
+
+                  <details class="chapter">
+                    <summary class="chapter-summary"><span class="toggle" aria-hidden="true"></span><span class="summary-main"><strong>第 8 章 · 第一夜</strong><small>2,118 字 · 临时安全屋 · 红眼丧尸锁定小队</small></span><span class="badge green">已验收</span></summary>
+                    <div class="chapter-details"><p>苏晴当面追问李小风的真实职业，问题尚未回答，窗外进化丧尸的红光已经亮起。</p></div>
+                  </details>
+
+                  <details class="chapter current-chapter" open>
+                    <summary class="chapter-summary">
+                      <span class="toggle" aria-hidden="true"></span>
+                      <span class="summary-main"><strong>第 9 章 · 他们开始信我了</strong><small>2,514 字 · 6 个实体 · 6 项状态变化</small></span>
+                      <span class="badge blue">当前章</span>
+                      <span class="badge green">已验收</span>
+                    </summary>
+                    <div class="chapter-details">
+                      <section>
+                        <div class="mini-label">CHAPTER SUMMARY</div>
+                        <p>小队识破红眼丧尸声东击西的佯攻，李小风消耗跨日结算的最后 1 点权限临时强化林越，完成越级击杀；两名队友对他的信任同时跃升，但远处的窥视者也已看完全程。</p>
+                      </section>
+                      <div class="detail-grid">
+                        <section class="detail-box">
+                          <div class="mini-label">参与实体</div>
+                          <div class="entity-list">
+                            <span class="entity"><span class="entity-type">角色</span><span class="entity-name">李小风 ★</span></span>
+                            <span class="entity"><span class="entity-type">角色</span><span class="entity-name">林越</span></span>
+                            <span class="entity"><span class="entity-type">角色</span><span class="entity-name">苏晴</span></span>
+                            <span class="entity"><span class="entity-type">敌对</span><span class="entity-name">红眼丧尸</span></span>
+                          </div>
+                        </section>
+                        <section class="detail-box">
+                          <div class="mini-label">本章新增</div>
+                          <div class="entity-list">
+                            <span class="entity item"><span class="entity-type">物品</span><span class="entity-name">高阶晶核</span></span>
+                            <span class="entity"><span class="entity-type">角色</span><span class="entity-name">屋顶窥视者</span></span>
+                          </div>
+                        </section>
+                      </div>
+                      <section>
+                        <div class="mini-label">STATE CHANGES</div>
+                        <div class="changes">
+                          <div class="change">
+                            <div class="change-heading"><span class="badge purple">角色</span><strong>林越</strong><span class="change-field">relationship.li_xiaofeng_trust</span></div>
+                            <div class="change-values"><code>部分信任</code><span>→</span><code>深度信任</code></div>
+                          </div>
+                          <div class="change">
+                            <div class="change-heading"><span class="badge purple">角色</span><strong>苏晴</strong><span class="change-field">relationship.li_xiaofeng</span></div>
+                            <div class="change-values"><code>疑惑试探</code><span>→</span><code>信服指挥判断</code></div>
+                          </div>
+                          <div class="change">
+                            <div class="change-heading"><span class="badge blue">能力</span><strong>林越</strong><span class="change-field">power.temp_boost</span></div>
+                            <div class="change-values"><code>无</code><span>→</span><code>力量、灵巧短时提升</code></div>
+                          </div>
+                          <div class="change">
+                            <div class="change-heading"><span class="badge red">风险</span><strong>李小风</strong><span class="change-field">gm.exposure_risk</span></div>
+                            <div class="change-values"><code>低</code><span>→</span><code>上升：外部目击者出现</code></div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </details>
+
+                  <div data-planned-range="10-10"></div>
+                </div>
+              </details>
+
+              <details class="stage">
+                <summary class="stage-summary">
+                  <span class="toggle" aria-hidden="true"></span>
+                  <span class="summary-main"><strong>阶段二 · 潜伏</strong><small>第 11–22 章 · 末世第 2–4 天</small></span>
+                  <span class="summary-badges"><span class="badge neutral">0 / 12 章</span><span class="badge purple">章纲已备</span></span>
+                </summary>
+                <div class="chapter-list" data-planned-range="11-22"></div>
+              </details>
+
+              <details class="stage">
+                <summary class="stage-summary">
+                  <span class="toggle" aria-hidden="true"></span>
+                  <span class="summary-main"><strong>阶段三 · 滚雪球</strong><small>第 23–35 章 · 末世第 6–8 天</small></span>
+                  <span class="summary-badges"><span class="badge neutral">0 / 13 章</span><span class="badge purple">章纲已备</span></span>
+                </summary>
+                <div class="chapter-list" data-planned-range="23-35"></div>
+              </details>
+
+              <details class="stage">
+                <summary class="stage-summary">
+                  <span class="toggle" aria-hidden="true"></span>
+                  <span class="summary-main"><strong>阶段四 · 决战</strong><small>第 36–50 章 · 末世第 9–10 天</small></span>
+                  <span class="summary-badges"><span class="badge neutral">0 / 15 章</span><span class="badge purple">卷末链已规划</span></span>
+                </summary>
+                <div class="chapter-list" data-planned-range="36-50"></div>
+              </details>
+            </div>
+          </details>
+        </section>
+
+        <section aria-label="后续卷">
+          <details class="card volume future-volume">
+            <summary class="volume-summary">
+              <span class="toggle" aria-hidden="true"></span>
+              <span class="summary-main">
+                <span class="volume-title"><strong>第 2 卷 · 集结令</strong><span class="badge purple">总纲已有</span></span>
+                <small>军方全域广播点名「能分配职业者」，身份隐藏危机全面升级</small>
+              </span>
+              <span class="progress-number"><strong>待规划</strong><small>章节范围未定</small></span>
+            </summary>
+            <div class="progress-track" aria-label="第二卷尚未开始"><span class="progress-fill" style="width:0"></span></div>
+            <div class="volume-meta"><span class="mini-label">当前状态</span><span class="badge neutral">卷名已定</span><span class="badge neutral">核心冲突已定</span><span class="badge amber">待拆分阶段与章节</span></div>
+          </details>
+        </section>
+
+        <p class="footer-note">静态交互 Demo · 不读写书项目 · 点击任意层级可展开 / 收起</p>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const plannedChapters = [{"n":10,"title":"求你给我个职业","goal":"面对胖三带人来\"收编\"，第一次半公开展示\"改命\"的威力","obstacles":"胖三团伙人多势众、等级压制，要抢人抢晶核","cost":"小规模亮牌，\"能分配职业\"的传闻开始扩散，逼近暴露红线","time":"末世第1天 深夜将尽（接近次日凌晨）","payoff":"跪求式打脸里程碑——被胁迫的弱者被主角当场改命反制，胖三手下有人当场跪求\"求你也给我分配一个\"（认可兑现+打脸）","changes":"主角首次半公开\"改命\"，震慑胖三、收拢人心；\"神秘能给人分配职业的人\"传闻起","question":"胖三灰溜溜回去报信，赵猛会怎么对待\"抢他人才的家伙\"？","hook":"胖三连滚带爬撤走前撂话——\"你死定了，赵爷会亲自来收拾你！\"","entities":["李小风","胖三","被改命的弱者","赵猛（威名进一步压来）"]},{"n":11,"title":"赵猛来了","goal":"在赵猛亲自上门问罪时保住小队、不暴露底牌","obstacles":"赵猛（高阶战士）气势与等级双重碾压，扬言要\"抢人才的家伙\"给个交代","cost":"为避正面冲突，主角当众折节、把自己包装成\"只会点小把戏的废物\"","time":"末世第2天 08:00 清晨","payoff":"反差蓄势——读者看着最强反派站在最弱主角面前，却不知自己错过了谁（张力钩）","changes":"赵猛与主角首次照面；主角以\"投效\"换取小队安全，潜入赵猛势力","question":"赵猛究竟是看走眼，还是另有盘算把主角留在身边？","hook":"赵猛冷笑着收下\"投效\"，却让胖三\"盯紧这几个废物\"","entities":["李小风","赵猛","林越","苏晴","赵猛团伙"]},{"n":12,"title":"投名状","goal":"在赵猛地盘站稳脚跟，换取行动自由","obstacles":"赵猛要\"投名状\"——完成一项危险的物资搜刮任务证明价值","cost":"接下高风险任务，队友暴露在危险中；必须交出部分收获","time":"末世第2天 11:00","payoff":"以弱换信任——主角用最小代价（指挥流）漂亮完成别人眼里的高危任务（策略爽点）","changes":"小队完成投名状、获得地盘内的有限行动权，为暗中布局打开空间","question":"有了行动自由，主角第一个要接触的\"苦力\"会是谁？","hook":"主角交任务时，目光落在苦力营里一个眼神未死的年轻人身上","entities":["李小风","林越","苏晴","搜刮任务","赵猛地盘"]},{"n":13,"title":"苦力营的真相","goal":"摸清赵猛地盘的运转与物资来路","obstacles":"赵猛严控信息；苦力营戒备森严；预警刚起、人心惶惶","cost":"为探消息冒被胖三盯上的风险","time":"末世第3天 09:00","payoff":"信息差优势——主角靠看穿面板，一眼识别谁可用、谁是眼线（认知爽点）","changes":"主角发现赵猛物资中混有军方制式补给——牵出\"军方在暗中活动\"的世界观线；大尸潮倒计时启动","question":"军方的东西怎么会在一个街头恶霸手里？D-7的尸潮又会怎样搅局？","hook":"主角在物资箱底摸到一枚军用识别牌，同一刻系统全域公告：尸潮将至，D-7","entities":["苦力营","赵猛的物资来路","军方补给箱（可疑标记）","大尸潮预警"]},{"n":14,"title":"第一枚暗棋","goal":"在赵猛眼皮底下，秘密改命第一个苦力，埋下反杀的种子","obstacles":"地盘监视严密；契约只剩最后1个名额，抉择沉重","cost":"用掉最后1个契约名额（1→0）；一旦这枚暗棋暴露，满盘皆输","time":"末世第3天 深夜","payoff":"改命+养蛊——被赵猛当牛马的苦力，被主角开出杀伤性隐藏职业（能力兑现+反转伏笔）","changes":"签下第3契约（陈铁），契约名额清零；地盘内埋下第一枚反杀暗棋","question":"名额已满，可赵猛地盘里还有那么多可用之人——上限能不能解锁？","hook":"契约达成瞬间，系统提示\"契约容量已满——检测到解锁条件线索\"，主角心头一动","entities":["李小风","暗棋苦力（陈铁","觉醒隐藏\"狂战/陷阵\"类职业）","最后契约名额"]},{"n":15,"title":"藏不住的锋芒","goal":"让林越在赵猛面前\"藏拙\"，避免被单独收编拆散小队","obstacles":"赵猛缺懂造装备的工匠，注意到林越的手艺，要把他挖走","cost":"为保住林越，主角不得不露出更多\"调度才能\"，被赵猛多看了一眼","time":"末世第4天 10:00","payoff":"暗度陈仓——明面上\"献出\"林越的手艺，暗地里借机把工坊变成己方据点（策略爽点）","changes":"林越进驻工坊、暗中成为主角在地盘的据点与补给源；赵猛对主角起疑心","question":"赵猛开始怀疑\"这个废物队长没那么简单\"，主角还能瞒多久？","hook":"赵猛似笑非笑地对主角说\"你，比你看起来有用\"","entities":["李小风","林越","赵猛","地盘工坊"]},{"n":16,"title":"医者的人心","goal":"借苏晴的医术在地盘中织出一张\"人情网\"，掩护暗中布局","obstacles":"赵猛的人受伤众多但缺医；苏晴不愿为恶人疗伤的心结","cost":"苏晴救治恶人一方，心理负担加重；主角要说服她\"救人是为了救更多人\"","time":"末世第4天 14:00","payoff":"软实力渗透——医师成为地盘里人人有求于她的关键人物，人心悄悄倒向主角（关系爽点）","changes":"苏晴成为地盘\"人情枢纽\"，为暗棋网提供掩护与情报；主角与苏晴的理念达成一致","question":"人心可用，但也可能反噬——被救的人里，会不会有赵猛的眼线？","hook":"一名被苏晴救过的团伙小头目私下透露\"赵爷最近在防着一个人\"","entities":["李小风","苏晴","被救治的团伙成员与苦力"]},{"n":17,"title":"一张暗网","goal":"把零散的可信者串成一张能里应外合的暗网","obstacles":"契约名额已满，只能靠\"未签约的同盟\"扩展，忠诚难保证","cost":"发展编外同盟，风险敞口扩大，一环失守则暴露全盘","time":"末世第4天 18:00 傍晚","payoff":"布局成型——主角用信息差把敌营内部织成自己的网（谋略爽点）","changes":"以三名契约者为节点，串起一张覆盖工坊/医帐/苦力营的暗网","question":"暗网越大越难瞒，赵猛的疑心也越来越重——谁会先动手？","hook":"暗网刚成，胖三却突然宣布\"赵爷要清点所有人的职业面板\"","entities":["李小风","陈铁","林越","苏晴","编外同盟（苦力与不满者）"]},{"n":18,"title":"清点面板","goal":"熬过赵猛的\"面板清点\"，不让改命的暗棋和自己的1级暴露","obstacles":"赵猛借清点排查异常；主角自身1级面板一旦被看到即穿帮","cost":"为遮掩，动用林越的伪装装备与苏晴的人情，欠下人情债","time":"末世第5天 09:00","payoff":"险过关+反利用——主角把清点反用成\"筛掉赵猛眼线\"的机会（反转爽点）","changes":"暗棋与主角身份惊险过关，主角反手借清点除掉/标记赵猛的眼线","question":"这次侥幸过关，但赵猛的疑心没消，下一次未必这么走运","hook":"清点结束，赵猛盯着主角看了很久，忽然说\"明天，你跟我去个地方\"","entities":["李小风","赵猛","胖三","伪装装备","面板清点"]},{"n":19,"title":"军方的影子","goal":"在随赵猛外出中，揭开物资来路与军方的关系","obstacles":"赵猛带主角去交易点，实为试探；军方代理人警惕性极高","cost":"主角近距离接触军方线，暴露风险陡增","time":"末世第5天 14:00","payoff":"世界观揭幕——军方在用物资\"收购觉醒者\"，一张更大的棋盘展开（认知爽点）","changes":"确认赵猛只是军方的马前卒；军方\"集中觉醒者\"的意图浮现，中反派线成形","question":"军方在大规模网罗觉醒者——他们若知道有个\"能分配职业的人\"，会付出什么来抢？","hook":"军方代理人无意间提到\"上头在找一种特殊的觉醒变异\"，主角后背发凉","entities":["李小风","赵猛","军方交易点","军方代理人（周振国部下）","\"收购觉醒者\"计划"]},{"n":20,"title":"赵猛的局","goal":"识破并破解赵猛设下的试探陷阱，稳住潜伏","obstacles":"赵猛设局——故意制造\"泄密机会\"引蛇出洞，怀疑主角就是内鬼","cost":"主角要牺牲一部分暗网利益去\"表忠\"，暗棋布局被迫放缓","time":"末世第6天 10:00","payoff":"将计就计——主角看穿陷阱、反把嫌疑引向赵猛的眼线（谋略反转爽点）","changes":"主角化解试探、把疑心引开，但赵猛的耐心也快到头，冲突临近临界","question":"潜伏还能维持多久？主角意识到必须在赵猛动手前抢先布好反杀的局","hook":"主角回到住处，陈铁传来消息——\"赵猛在秘密调集人手，好像要对付谁\"","entities":["李小风","赵猛","眼线","暗网","试探局"]},{"n":21,"title":"抢先落子","goal":"在赵猛动手前，把反杀的暗桩逐一布置到位","obstacles":"时间紧、监视密；暗网成员各有顾虑，未必敢在关键时刻反戈","cost":"主角必须先兑现承诺——用改命证明\"跟着我能活得更好\"，透支权限点","time":"末世第6天 16:00","payoff":"布局兑现——主角逐个给暗桩加码，战力悄然反超（能力兑现+蓄势）","changes":"反杀暗桩到位；主角权限点透支，急需\"解锁契约上限\"补足力量","question":"布局就绪，可契约上限不破，主角能调动的力量就有天花板——线索指向哪？","hook":"陈铁完成一次漂亮反制后，主角面板闪现\"契约解锁条件：达成×××\"的进度条","entities":["李小风","陈铁","暗网暗桩","权限点","反杀布置"]},{"n":22,"title":"解锁·契约上限","goal":"达成隐藏条件，突破契约名额上限，力量再上台阶","obstacles":"解锁条件要求\"以信任换忠诚\"（如：让一名签约者在生死关头自愿为队友挡下危险），与主角\"不信人\"的本性对撞","cost":"主角必须先信任别人、把主动权交出去，才能解锁——精神层面的第一次让步","time":"末世第6天 20:00 入夜","payoff":"滚雪球质变——契约上限解锁（3→更多），主角可支配的团队战力跃升（成长里程碑）","changes":"契约上限突破，主角批量吸纳可信者、力量结构性增强；成长弧\"学会交出信任\"迈第一步","question":"力量够了，但赵猛的刀也快落下——决战会先从哪里爆发？","hook":"契约容量跳涨的提示还亮着，屋外骤然响起赵猛集结号——夜袭开始了","entities":["李小风","契约上限","解锁条件","暗网新签约者"]},{"n":23,"title":"夜袭","goal":"顶住赵猛的突然夜袭，暗网首次由暗转明配合作战","obstacles":"赵猛趁主角立足未稳强袭，兵力占优","cost":"暗桩被迫提前亮身份，潜伏优势消耗；有编外同盟伤亡","time":"末世第6天 22:00 深夜","payoff":"暗网发动——赵猛以为在打一盘散沙，却撞上主角早已织好的配合网（反转爽点）","changes":"暗网首次成建制配合、打退夜袭；但潜伏彻底转明，双方进入正面对峙","question":"夜袭被挡，赵猛恼羞成怒，会不会掀桌子请出更狠的手段？","hook":"赵猛败退时冷笑\"没想到你藏了这么多人……那就别怪我请客了\"","entities":["李小风","陈铁","暗网","赵猛夜袭队"]},{"n":24,"title":"被看见的人（中段反转）","goal":"应对夜袭后浮现的更大危机——主角发现自己\"被更高层的存在注意到了\"","obstacles":"主角大规模用GM改命时，面板闪过一段不属于系统的\"外来注视\"；同时军方因赵猛地盘异动而介入","cost":"主角意识到——安全区从不存在，越用GM越危险，身份必须藏得更深","time":"末世第7天 02:00 后半夜","payoff":"格局炸开——原来还有\"另一个能改命的人\"在暗处，棋盘瞬间放大（悬念爽点）","changes":"中段反转——揭示\"世上不止一个管理员\"，且军方与尸潮同时逼近，主角从\"斗恶霸\"被拽入更大棋局","question":"那道注视是谁？他是敌是友，会不会先军方一步找到自己？","hook":"外来注视消失前，主角\"看到\"对方面板一角——冷冰冰四个字：\"奴役权限\"","entities":["李小风","GM权限","外来注视（镜像管理员）","军方介入信号","大尸潮 D-3"]},{"n":25,"title":"刀锋逼近","goal":"在军方介入与赵猛反扑的夹缝中，保住小队与暗网","obstacles":"赵猛请来更强帮手/放话要挖出\"内鬼头目\"；军方巡逻逼近地盘","cost":"主角被迫压缩暗网活动，几名暗桩暴露、处境危险","time":"末世第7天 09:00","payoff":"多线博弈——主角同时算计赵猛、躲避军方、防备镜像，走钢丝般的操盘（谋略爽点）","changes":"局势收紧，主角意识到必须速战速决，在军方彻底介入前解决赵猛","question":"三方压力叠加，主角要先动手了——第一刀砍向谁？","hook":"陈铁急报\"有个暗桩被胖三抓了，正在严刑逼供\"","entities":["李小风","赵猛帮手","军方巡逻","暴露的暗桩"]},{"n":26,"title":"叛徒（信任线试炼）","goal":"处理\"暗桩被抓、可能供出全网\"的信任危机","obstacles":"被抓暗桩在酷刑下动摇；编外同盟中有人主张\"弃卒保帅\"甚至告密自保","cost":"主角面临\"要不要牺牲一个人保全大局\"的抉择，直击其\"不信人\"的旧伤","time":"末世第7天 13:00","payoff":"反套路选择——主角偏不弃卒，选择冒险救人，与\"末世人性冷漠\"形成反差（情绪爽点）","changes":"信任线试炼开场——主角识破告密者、决意救回被抓暗桩，赌一次人心","question":"主角亲自下场救人风险极大（他才1级），值得吗？队友会不会拦他？","hook":"主角起身要去救人，林越、苏晴、陈铁却齐齐挡在门口——\"要去，一起去\"","entities":["李小风","被抓暗桩","动摇的编外同盟","告密者"]},{"n":27,"title":"我赌你们不会跑","goal":"里应外合救回被抓暗桩，完成信任线的第一次正向兑现","obstacles":"救援深入敌营、主角本人毫无战力，全靠把后背交给队友","cost":"主角第一次真正\"押上自己的命\"信任队友，一旦有人退缩他必死","time":"末世第7天 15:00","payoff":"信任兑现+越险救人——1级的他站在最危险的位置，队友无一退缩（情绪高潮+以弱破局）","changes":"成功救回暗桩、重创胖三；主角成长弧关键一跃——从\"把签约当交易\"到\"真心信任\"","question":"救人惊动全局，赵猛再无耐心，最终决战一触即发","hook":"胖三重伤逃回，赵猛霍然起身\"传令下去，明天，血洗那群废物\"","entities":["李小风","林越","苏晴","陈铁","被救暗桩","胖三"]},{"n":28,"title":"决战前夜","goal":"在最终决战前完成双方的力量对表与人心归拢","obstacles":"赵猛集结全部主力，兵力仍占优；主角一方虽有暗网但硬实力不足","cost":"主角要把最后的权限点、晶核全部押上，孤注一掷","time":"末世第7天 21:00 入夜","payoff":"全军升级——决战前主角为全员改命加码，团队战力集中可视化爆发（能力兑现总账）","changes":"主角完成决战前总动员，团队拧成一股绳；也把身份暴露风险推到最高","question":"明日一战，主角的1级底牌很可能被赵猛当众揭穿——他扛得住吗？","hook":"布置完毕，苏晴轻声问\"如果他们发现你只有1级……\"主角笑了笑没答","entities":["李小风","全体契约者与暗网","权限点总押","赵猛主力"]},{"n":29,"title":"尸潮将至（D-3收紧）","goal":"把逼近的大尸潮，从威胁转化为决战的变量/助力","obstacles":"大尸潮 D-3 逼近，双方都得分心防潮；潮水方向难测","cost":"主角要冒险预判尸潮路线，赌错则腹背受敌","time":"末世第8天 08:00","payoff":"借势天灾——主角谋划\"引尸潮清场赵猛\"，把最大危机变成最大棋子（谋略爽点）","changes":"主角定下\"借尸潮决战\"的总方略，把外部灾难纳入战术","question":"引潮是把双刃剑，控制得住吗？一旦失控，谁都别想活","hook":"主角在地图上圈定引潮路线，指尖停在赵猛老巢的位置","entities":["李小风","大尸潮","地形","引潮计划"]},{"n":30,"title":"宣战","goal":"迎接赵猛的正式进攻，拉开卷末决战的序幕","obstacles":"赵猛倾巢而出、气势汹汹；尸潮临界、时间被双重挤压","cost":"主角被迫在\"尸潮未到位\"时提前应战，打乱部分节奏","time":"末世第8天 14:00","payoff":"阶段小高潮——主角首度公开调度全军迎敌，暗网彻底浮出水面（气势爽点）","changes":"决战正式打响；主角从潜伏者转为正面棋手，全盘博弈进入终局","question":"提前开战、尸潮未到，主角的\"借势\"计划还能成吗？","hook":"两军对垒之际，地平线尽头扬起遮天蔽日的尘土——尸潮，比预计来得更早","entities":["李小风","赵猛全军","暗网全员","决战战场"]},{"n":31,"title":"三方乱局","goal":"在尸潮提前杀到的混乱里，稳住阵脚、不被赵猛与尸潮夹死","obstacles":"尸潮、赵猛主力、自军三方混战，战场彻底失控","cost":"原定引潮计划被打乱，主角要临场改招，暗桩各自为战风险剧增","time":"末世第8天 15:00","payoff":"临场指挥流——主角在混乱中重构战场秩序，越乱越显调度之能（策略爽点）","changes":"主角临场把\"失控\"重新捏成\"可控\"，稳住不利开局","question":"尸潮成了谁的助力？主角能不能后发制人把它引向赵猛？","hook":"主角盯着尸潮涌动的方向，低声下令\"放弃东线，把他们往赵猛老巢引\"","entities":["李小风","尸潮","赵猛主力","暗网","失控战场"]},{"n":32,"title":"借刀","goal":"把尸潮引向赵猛侧翼，用天灾之刀削掉赵猛的兵力优势","obstacles":"引潮需要有人做\"诱饵\"深入险地；赵猛识出意图后拼命反制","cost":"诱饵位置九死一生，暗桩自愿请缨、伤亡真实","time":"末世第8天 17:00","payoff":"借势削敌——尸潮如约撞进赵猛侧翼，兵力对比逆转（谋略兑现爽点）","changes":"引潮成功、赵猛侧翼崩溃，战局向主角倾斜；但己方付出伤亡代价","question":"削了侧翼，赵猛本人的怒火会烧向谁？","hook":"赵猛在尘烟中锁定主角所在，嘶吼\"就是你！给我活捉那个废物队长！\"","entities":["李小风","尸潮","诱饵暗桩","赵猛侧翼"]},{"n":33,"title":"反扑","goal":"顶住赵猛失去侧翼后的疯狂反扑，保住核心队友","obstacles":"赵猛红了眼，集中残余精锐直取主角中军","cost":"暗网防线被撕开缺口，数名暗桩重伤/被俘","time":"末世第8天 19:00 傍晚","payoff":"绝境调度——主角以残破之师层层迟滞精锐，硬生生拖住赵猛（韧性爽点）","changes":"赵猛反扑撕开缺口、俘走暗桩，为其\"揭穿主角\"埋下引信","question":"被俘的人会不会供出\"主角只有1级\"这个致命秘密？","hook":"被俘暗桩被拖到赵猛面前，赵猛狞笑\"说，你们那个队长，到底什么来路？\"","entities":["李小风","赵猛精锐","暗网防线","被俘暗桩"]},{"n":34,"title":"铁蹄压境","goal":"应对军方借尸潮/乱战之机开入战场的新变量","obstacles":"军方（周振国部）以\"平乱收编\"为名开进，实为搜寻\"特殊觉醒变异\"","cost":"主角腹背受敌，必须在军方锁定自己前结束与赵猛的战斗","time":"末世第9天 08:00","payoff":"格局压迫——更高层级的势力碾压式入场，衬出主角以弱周旋的分量（世界观爽点）","changes":"军方正式入场，中反派压力具象；主角决战进入\"必须速胜\"的倒计时","question":"军方在找的\"特殊觉醒变异\"，会不会顺着赵猛的俘虏找到主角头上？","hook":"军方广播回荡战场——\"发现异常觉醒者，立即上报，重赏\"","entities":["李小风","军方部队","周振国（幕后名号）","\"特殊觉醒变异\"搜寻令"]},{"n":35,"title":"破绽","goal":"抢在赵猛与军方合流之前，撬开赵猛的致命破绽","obstacles":"赵猛据守老巢、以俘虏要挟；军方步步逼近","cost":"主角要冒险亲赴阵前谈判/诈降，把自己送进最危险的地方","time":"末世第9天 12:00","payoff":"识局破局——主角看穿赵猛色厉内荏，用一招诈术撬动其阵脚（谋略爽点）","changes":"主角设局逼赵猛把主力压上、露出老巢空虚，为总攻创造条件；自己也踏入险境","question":"主角孤身犯险，赵猛会不会趁机当众拆穿他、把他钉死在1级上？","hook":"赵猛盯着自投罗网的主角，忽然笑了\"我早就觉得你不对劲——来人，把他的面板给我调出来！\"","entities":["李小风","赵猛","俘虏人质","老巢","诈术布局"]},{"n":36,"title":"人质","goal":"破解赵猛\"以核心队友为质\"的杀招，避免被牵着鼻子走","obstacles":"赵猛擒住一名核心队友（如陈铁）当众要挟，逼主角就范","cost":"主角若强攻则队友死，若妥协则满盘皆输，进退两难","time":"末世第9天 14:00","payoff":"反要挟——主角用赵猛想不到的方式（信息差/暗桩）把\"人质局\"反转（反转爽点）","changes":"主角化解人质要挟、稳住阵脚，但被迫暴露更多底牌，逼近身份红线","question":"底牌越露越多，赵猛离拆穿\"1级真相\"只差一步了","hook":"赵猛咬牙\"你到底是什么职业，能让这么多人替你卖命？\"手已按向主角面板","entities":["李小风","赵猛","被擒核心队友","暗桩后手"]},{"n":37,"title":"墙角","goal":"在被赵猛逼到墙角、四面受敌时，撑到反杀条件成熟","obstacles":"赵猛步步紧逼、军方逼近、尸潮 D-1，三重绞索同时收紧","cost":"主角把最后的权限点耗尽，只剩一次调度机会","time":"末世第9天 16:00","payoff":"极限拉扯——主角在三重绝境里精算每一分资源，把绝路走成生路（韧性爽点）","changes":"主角被逼到绝境，把所有变量算进最后一击，只待引信点燃","question":"最后一击的胜负，全押在\"队友会不会在他被拆穿时仍然信他\"上","hook":"赵猛一把扯出主角面板，狂笑戛然而止——满场死寂，所有人都看见了那个刺眼的\"1\"","entities":["李小风","赵猛","军方","尸潮","最后一次调度机会"]},{"n":38,"title":"他只有1级（卷末最低谷）","goal":"熬过身份被当众拆穿、信任濒临崩塌的至暗时刻","obstacles":"赵猛当众揭穿\"你们的队长是个1级废物\"，全场哗然，队友一瞬迟疑","cost":"主角一切伪装尽毁，队伍向心力遭遇最猛烈冲击，命悬一线","time":"末世第9天 16:30","payoff":"至暗蓄力——把主角摔到最低点，为下一章的信任大兑现拉满落差（情绪张力）","changes":"卷末最低谷——身份全暴露、信任受最猛冲击，主角选择不再狡辩、坦然把命交给队友","question":"那一瞬的迟疑之后，队友会调转枪口，还是站到他身边？","hook":"赵猛狞笑\"现在，谁还愿意为一个1级废物送死？\"——话音落，一片死寂里，有人握紧了武器","entities":["李小风","赵猛","迟疑的队友","被拆穿的1级真相"]},{"n":39,"title":"我们信他（信任线总兑现）","goal":"以队友的选择完成信任线总兑现，绝地反转","obstacles":"赵猛以为拆穿等级就能瓦解人心，全力施压","cost":"队友明知他1级仍选择追随，等于把各自的命也押上","time":"末世第9天 17:00","payoff":"信任大兑现+人心反杀——\"1级又如何，我们信的是他这个人\"，全场倒戈（情绪高潮+打脸）","changes":"队友与暗网齐齐站到主角身侧，赵猛的\"等级碾压\"逻辑当场破产；主角成长弧兑现","question":"人心已回，但赵猛与尸潮仍在，反杀的最后一击怎么落？","hook":"林越挡在主角身前，扬起手里的武器\"赵猛，你永远不懂——我们跟的从来不是等级\"","entities":["李小风","林越","苏晴","陈铁","暗网全员","赵猛"]},{"n":40,"title":"反攻号角","goal":"借人心倒戈之势，吹响全面反攻的号角","obstacles":"赵猛狗急跳墙、军方逼近、尸潮 D-1 临界，三重压力仍在","cost":"反攻窗口极短，必须一鼓作气，容不得半点失误","time":"末世第9天 18:00 傍晚","payoff":"全军反攻——刚倒戈的人心化作战力洪流，主角首次真正意义上\"号令三军\"（气势高潮）","changes":"主角发动全面反攻、压制赵猛残部，为卷末终战铺平道路","question":"只要引潮总闸一开，赵猛必败——但尸潮会不会连主角一起吞了？","hook":"主角抬手，指向蓄势待发的尸潮闸口\"该收网了\"","entities":["李小风","倒戈全军","赵猛残部","引潮总闸"]},{"n":41,"title":"收网","goal":"开启引潮总闸，把尸潮精准砸向赵猛老巢","obstacles":"引潮时机稍纵即逝；赵猛拼死封堵闸口；军方在外围虎视","cost":"开闸即意味着战场再无退路，主角把全队命运压在这一注上","time":"末世第9天 20:00 入夜","payoff":"谋略总兑现——布置一整卷的引潮之局如约收网，天灾化作己方最强兵器（爽点高潮）","changes":"引潮成功、尸潮扑向赵猛老巢，决战天平决定性倾斜","question":"尸潮吞了老巢，可赵猛这条疯狗，会不会拉着所有人陪葬？","hook":"老巢在尸潮中崩塌，赵猛的怒吼却从火海里传来\"要死一起死！\"","entities":["李小风","引潮总闸","尸潮","赵猛老巢"]},{"n":42,"title":"困兽","goal":"顶住赵猛失巢后的疯狂反噬，护住反攻阵型","obstacles":"赵猛突破职业极限暴走，单体战力暴涨，直冲主角","cost":"为挡赵猛，暗桩接力赴死拖延，伤亡沉重","time":"末世第9天 21:30","payoff":"以命换势——众人以血肉迟滞暴走赵猛，主角在血路尽头完成致命布置（悲壮+蓄势）","changes":"赵猛暴走突进被层层迟滞，主角借此完成反杀的最后一环布置","question":"赵猛已是强弩之末，收尾这一击，谁来落下？","hook":"赵猛杀到主角面前，狞笑刚起，脚下地面却亮起林越早已埋好的陷阱纹路","entities":["李小风","暴走赵猛","暗桩","致命布置"]},{"n":43,"title":"合围","goal":"以全军+尸潮+陷阱三重合围，锁死暴走的赵猛","obstacles":"赵猛垂死反扑、破坏力惊人；合围任一环松动即前功尽弃","cost":"合围需要每个人卡死自己的位置，主角本人也站进包围圈最险的一环","time":"末世第9天 23:00 深夜","payoff":"全员配合的极致——每个被主角改命的人各司其职，织成杀死强者的天罗地网（配合爽点）","changes":"三重合围成型、赵猛被彻底锁死，反杀进入读秒","question":"网已收紧，最后一刀，主角会让谁来终结这场恩怨？","hook":"赵猛困在网中嘶吼\"你一个1级的废物，凭什么！\"主角平静开口\"凭他们\"","entities":["李小风","全军","尸潮","陷阱","赵猛"]},{"n":44,"title":"最后的杀招","goal":"破解赵猛拉人陪葬的最后疯招，全身而退","obstacles":"赵猛引爆晶核/自曝式杀招，要把主角与核心队友一起带走","cost":"主角必须瞬间抉择——救谁、弃什么，任何迟疑都要人命","time":"末世第10天 00:30 后半夜","payoff":"险中反制——主角用信息差预判自曝、抢先一步化解，把赵猛的杀招反砸回去（反转爽点）","changes":"主角预判并化解赵猛同归于尽的杀招，护住全员，赵猛最后的牌打空","question":"杀招已破，赵猛再无后手——终结的一刻到了","hook":"赵猛难以置信地看着失效的杀招，主角一挥手\"结束他\"","entities":["李小风","赵猛自曝杀招","核心队友","化解手段"]},{"n":45,"title":"跪下，求个职业（卷末高潮·反杀）","goal":"终结赵猛、瓦解其团伙，完成全卷最大爽点兑现","obstacles":"赵猛残党负隅顽抗；胜负已定但收尾要干净利落","cost":"一战成名，\"能分配职业的人\"传闻从此再难遮掩","time":"末世第10天 01:30","payoff":"终极打脸兑现——赵猛残党当众跪地求主角收留、\"求你也给我分配个职业\"，一卷蓄势彻底释放（打脸+认可高潮）","changes":"赵猛被反杀、团伙瓦解；主角一方收编残党、声威大振；卷末高潮兑现","question":"赢是赢了，可尸潮 D-0 正全面爆发——胜利者能守住这片打下来的地方吗？","hook":"残党跪地求收留之际，天边尸潮如黑云压顶般铺天盖地涌来","entities":["李小风","赵猛（终结）","跪求的残党","全军"]},{"n":46,"title":"借来的刀","goal":"控制住反噬的尸潮，别让\"借来的刀\"砍到自己","obstacles":"D-0 尸潮全面爆发，引来的潮水现在无差别扑向所有幸存者","cost":"主角要放弃部分刚打下的地盘、组织撤防，胜利果实缩水","time":"末世第10天 03:00","payoff":"临危调度——主角把混乱撤防指挥得井井有条，尽显统帅之能（韧性爽点）","changes":"主角组织有序撤防、把损失压到最低，团队在灾难中完成第一次真正的\"整体协作\"","question":"守不住老巢废墟，那这支刚成型的队伍，下一个立足点在哪？","hook":"撤退途中，苏晴指着远处一座结构完整的建筑群\"那里……好像能守\"","entities":["李小风","爆发尸潮","撤防","新收编众人"]},{"n":47,"title":"守住","goal":"在新立足点顶住尸潮爆发的最猛一波，把据点钉下来","obstacles":"尸潮巅峰冲击；新收编众人未磨合、军心待稳","cost":"主角押上刚解锁的契约容量，为守点全员改命,权限点再度见底","time":"末世第10天 06:00 清晨","payoff":"据点保卫战——工匠布防、医师续航、战士死守、指挥若定，一体成型的团队首秀（配合高潮）","changes":"团队顶住尸潮巅峰、守住新据点；新老成员经此一战真正拧成一体","question":"据点守住了，但这么大动静，会不会把军方彻底招来？","hook":"最后一只丧尸倒下，天光大亮；同一刻，远处传来军用车队的引擎轰鸣","entities":["李小风","新据点","尸潮巅峰","全员改命","防线"]},{"n":48,"title":"这里，是我们的地方","goal":"清点战果、把据点正式立起来，兑现\"拉起一支队伍、有一块地方\"的开卷承诺","obstacles":"物资清算、人心安置、伤亡善后，百废待兴","cost":"主角要把权力/资源分配公开化，接受众人审视，考验其治理","time":"末世第10天 10:00","payoff":"基业落定——从一个人到一支队伍、一座据点，成长总账可视化结算（成就爽点）","changes":"第一个据点正式成立、团队建制成型；主角确立\"契约式共同体\"的雏形秩序","question":"有了地盘就有了目标——外面还有多少像赵猛一样的人，多少像军方一样的势力？","hook":"众人推举主角为据点之主，他望着这群曾谁都不信的人，第一次真心笑了","entities":["李小风","新据点","契约者全员","战后清算","分配秩序"]},{"n":49,"title":"他们在找一个人","goal":"面对军方接触，摸清其来意，同时藏好GM身份","obstacles":"军方（周振国部）以\"招抚幸存据点\"为名接触，实则在排查\"特殊觉醒者\"","cost":"主角要在配合表面招抚与隐藏身份之间走钢丝，暴露风险再起","time":"末世第10天 15:00","payoff":"暗流博弈——主角在军方眼皮底下滴水不漏地周旋，观众替他捏汗（悬念爽点）","changes":"军方与据点建立表面联系；主角确认军方在系统性搜寻\"能改命的特殊觉醒者\"","question":"军方明明是漫无目标地排查，怎么偏偏对这片区域格外上心？","hook":"军方使者临走前意味深长地看了主角一眼\"上面很想见见……能让废物变强的人\"","entities":["李小风","军方使者","周振国（名号进一步坐实）","招抚","身份隐藏"]},{"n":50,"title":"广播里的名字（卷末·新钩子）","goal":"以军方全域广播点名收束本卷，抛出通向第2卷的最大悬念","obstacles":"广播把\"能分配职业的人\"公之于众，据点内外人心浮动，暴露风险陡增","cost":"主角从\"藏在暗处的管理员\"被推到聚光灯边缘，安宁到此为止","time":"末世第10天 20:00 入夜","payoff":"格局炸场——一句广播把个人恩怨升维成全城/全国级的棋局，钩住下一卷（悬念高潮）","changes":"军方全域广播点名\"能分配职业者请现身\"；同时传来\"远方有人在制造听话的怪物军团\"；本卷收束、主线升维","question":"军方广播为什么会知道\"有人能分配职业\"？——他们要找的正是李小风，是谁走漏了消息？（落到下一卷）","hook":"广播回荡在末世的夜空，据点里所有人不约而同看向李小风——包括那些刚刚才决定信他的人","entities":["李小风","军方全域广播","\"能分配职业者\"","镜像管理员传闻","第2卷钩子"]}]
+    const escapeHtml = value => String(value || '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[char])
+    const outlineField = (label, value) => value
+      ? `<div class="detail-box"><div class="mini-label">${escapeHtml(label)}</div><p>${escapeHtml(value)}</p></div>`
+      : ''
+    const plannedChapterMarkup = chapter => {
+      const entities = (chapter.entities || []).map(entity => (
+        `<span class="entity"><span class="entity-type">卷纲</span><span class="entity-name">${escapeHtml(entity)}</span></span>`
+      )).join('')
+      const detailFields = [
+        ['目标', chapter.goal],
+        ['阻力', chapter.obstacles],
+        ['代价', chapter.cost],
+        ['时间锚点', chapter.time],
+        ['爽点', chapter.payoff],
+        ['本章变化', chapter.changes],
+        ['章末未闭合问题', chapter.question],
+        ['钩子', chapter.hook],
+      ].map(([label, value]) => outlineField(label, value)).join('')
+      return `
+        <details class="chapter planned">
+          <summary class="chapter-summary">
+            <span class="toggle" aria-hidden="true"></span>
+            <span class="summary-main">
+              <strong>第 ${chapter.n} 章 · ${escapeHtml(chapter.title)}</strong>
+              <small>详细卷纲 · ${(chapter.entities || []).length} 个关键实体${chapter.time ? ` · ${escapeHtml(chapter.time)}` : ''}</small>
+            </span>
+            <span class="badge amber">待写</span>
+          </summary>
+          <div class="chapter-details">
+            <div class="mini-label">DETAILED VOLUME OUTLINE</div>
+            <div class="detail-grid">${detailFields}</div>
+            <section><div class="mini-label">卷纲关键实体</div><div class="entity-list">${entities || '<span class="muted">未单独列出</span>'}</div></section>
+          </div>
+        </details>`
+    }
+    document.querySelectorAll('[data-planned-range]').forEach(container => {
+      const [start, end] = container.dataset.plannedRange.split('-').map(Number)
+      container.innerHTML = plannedChapters
+        .filter(chapter => chapter.n >= start && chapter.n <= end)
+        .map(plannedChapterMarkup)
+        .join('')
+    })
+
+    const nestedDetails = Array.from(document.querySelectorAll('details'))
+    document.getElementById('expand-all').addEventListener('click', () => {
+      nestedDetails.forEach(item => { item.open = true })
+    })
+    document.getElementById('collapse-all').addEventListener('click', () => {
+      nestedDetails.forEach(item => { item.open = false })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+    document.querySelectorAll('a[href="#"]').forEach(link => {
+      link.addEventListener('click', event => event.preventDefault())
+    })
+  </script>
+</body>
+</html>

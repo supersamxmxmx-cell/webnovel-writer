@@ -36,6 +36,7 @@ LOCAL_CORS_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://127.0.0.1:8000",
 ]
+MILESTONE_STAGE_LABELS = ("开篇", "发展", "转折", "收束")
 
 
 def _get_project_root() -> Path:
@@ -147,6 +148,97 @@ def _build_strand_map(state: dict) -> dict[int, str]:
         if chapter > 0 and strand:
             strand_map[chapter] = strand
     return strand_map
+
+
+def _parse_chapter_range(raw: object) -> tuple[int, int] | None:
+    text = str(raw or "").strip()
+    if "-" not in text:
+        return None
+    left, _, right = text.partition("-")
+    try:
+        start = int(left.strip())
+        end = int(right.strip())
+    except (TypeError, ValueError):
+        return None
+    if start <= 0 or end <= 0 or start > end:
+        return None
+    return start, end
+
+
+def _build_stage_ranges(start: int, end: int) -> list[dict]:
+    span = max(1, end - start + 1)
+    stage_count = min(len(MILESTONE_STAGE_LABELS), span)
+    if stage_count == 1:
+        labels = ("全卷",)
+    elif stage_count == 2:
+        labels = (MILESTONE_STAGE_LABELS[0], MILESTONE_STAGE_LABELS[-1])
+    elif stage_count == 3:
+        labels = (
+            MILESTONE_STAGE_LABELS[0],
+            MILESTONE_STAGE_LABELS[1],
+            MILESTONE_STAGE_LABELS[-1],
+        )
+    else:
+        labels = MILESTONE_STAGE_LABELS
+    stages: list[dict] = []
+    for index, label in enumerate(labels):
+        stage_start = start + (span * index) // stage_count
+        stage_end = start + (span * (index + 1)) // stage_count - 1
+        if index == stage_count - 1:
+            stage_end = end
+        stages.append(
+            {
+                "id": f"stage-{index + 1}",
+                "label": label,
+                "start_chapter": stage_start,
+                "end_chapter": stage_end,
+                "chapters": [],
+            }
+        )
+    return stages
+
+
+def _volume_ranges_from_state(state: dict, chapter_numbers: list[int]) -> list[dict]:
+    progress = state.get("progress") if isinstance(state, dict) else {}
+    progress = progress if isinstance(progress, dict) else {}
+    planned = progress.get("volumes_planned")
+    volumes: list[dict] = []
+    if isinstance(planned, list):
+        for item in planned:
+            if not isinstance(item, dict):
+                continue
+            try:
+                volume = int(item.get("volume") or 0)
+            except (TypeError, ValueError):
+                continue
+            chapter_range = _parse_chapter_range(item.get("chapters_range"))
+            if volume <= 0 or chapter_range is None:
+                continue
+            start, end = chapter_range
+            volumes.append(
+                {
+                    "volume": volume,
+                    "label": str(item.get("title") or item.get("name") or f"第 {volume} 卷"),
+                    "start_chapter": start,
+                    "end_chapter": end,
+                }
+            )
+
+    if not volumes and chapter_numbers:
+        current_volume = progress.get("current_volume")
+        try:
+            volume = max(1, int(current_volume or 1))
+        except (TypeError, ValueError):
+            volume = 1
+        volumes.append(
+            {
+                "volume": volume,
+                "label": f"第 {volume} 卷",
+                "start_chapter": min(chapter_numbers),
+                "end_chapter": max(chapter_numbers),
+            }
+        )
+    return sorted(volumes, key=lambda item: (item["start_chapter"], item["volume"]))
 
 
 def _extract_story_chapter(path: Path) -> int:
@@ -319,6 +411,319 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
             if "no such table" in str(exc).lower() or "no such column" in str(exc).lower():
                 return []
             raise HTTPException(status_code=500, detail=f"数据库查询失败: {exc}") from exc
+
+    @app.get("/api/milestones")
+    def milestones():
+        """按卷、阶段、章节聚合写作进度与实体变化（只读）。"""
+        from chapter_outline_loader import load_all_volume_outline_plans
+
+        state = _load_state_payload()
+        progress = state.get("progress") if isinstance(state.get("progress"), dict) else {}
+        db_path = _webnovel_dir() / "index.db"
+        chapters: list[dict] = []
+        entities: list[dict] = []
+        state_changes: list[dict] = []
+
+        if db_path.is_file():
+            with closing(sqlite3.connect(str(db_path))) as conn:
+                conn.row_factory = sqlite3.Row
+                chapters = _fetchall_safe(
+                    conn,
+                    "SELECT * FROM chapters ORDER BY chapter ASC",
+                )
+                entities = _fetchall_safe(
+                    conn,
+                    "SELECT * FROM entities",
+                )
+                state_changes = _fetchall_safe(
+                    conn,
+                    "SELECT * FROM state_changes ORDER BY chapter ASC",
+                )
+
+        normalized_entities: list[dict] = []
+        entity_map: dict[str, dict] = {}
+        entity_type_counts: dict[str, int] = {}
+        for row in entities:
+            if bool(row.get("is_archived")):
+                continue
+            entity_id = str(row.get("id") or "").strip()
+            entity_type = str(row.get("type") or "其他").strip() or "其他"
+            try:
+                first_appearance = int(row.get("first_appearance") or 0)
+            except (TypeError, ValueError):
+                first_appearance = 0
+            try:
+                last_appearance = int(row.get("last_appearance") or 0)
+            except (TypeError, ValueError):
+                last_appearance = 0
+            item = {
+                **row,
+                "id": entity_id,
+                "type": entity_type,
+                "canonical_name": str(row.get("canonical_name") or entity_id or "未命名实体"),
+                "current": _parse_json_value(row.get("current_json"), {}),
+                "first_appearance": first_appearance,
+                "last_appearance": last_appearance,
+                "is_protagonist": bool(row.get("is_protagonist")),
+            }
+            normalized_entities.append(item)
+            if entity_id:
+                entity_map[entity_id] = item
+            entity_type_counts[entity_type] = entity_type_counts.get(entity_type, 0) + 1
+        normalized_entities.sort(
+            key=lambda item: (item["first_appearance"], item["canonical_name"], item["id"])
+        )
+
+        first_appearances: dict[int, list[dict]] = {}
+        for entity in normalized_entities:
+            chapter = int(entity.get("first_appearance") or 0)
+            if chapter > 0:
+                first_appearances.setdefault(chapter, []).append(entity)
+
+        changes_by_chapter: dict[int, list[dict]] = {}
+        for row in state_changes:
+            try:
+                chapter = int(row.get("chapter") or 0)
+            except (TypeError, ValueError):
+                continue
+            if chapter <= 0:
+                continue
+            entity = entity_map.get(str(row.get("entity_id") or ""), {})
+            changes_by_chapter.setdefault(chapter, []).append(
+                {
+                    **row,
+                    "entity_name": entity.get("canonical_name") or row.get("entity_id") or "未知实体",
+                    "entity_type": entity.get("type") or "其他",
+                }
+            )
+
+        normalized_chapters: list[dict] = []
+        for row in chapters:
+            try:
+                chapter = int(row.get("chapter") or 0)
+            except (TypeError, ValueError):
+                continue
+            if chapter <= 0:
+                continue
+            character_ids = _parse_json_value(row.get("characters"), [])
+            if not isinstance(character_ids, list):
+                character_ids = []
+            involved: dict[str, dict] = {}
+            for raw_id in character_ids:
+                entity_id = str(raw_id or "").strip()
+                if not entity_id:
+                    continue
+                involved[entity_id] = entity_map.get(
+                    entity_id,
+                    {
+                        "id": entity_id,
+                        "canonical_name": entity_id,
+                        "type": "角色",
+                        "tier": "",
+                        "first_appearance": chapter,
+                        "last_appearance": chapter,
+                    },
+                )
+            for entity in first_appearances.get(chapter, []):
+                involved[entity["id"]] = entity
+            for change in changes_by_chapter.get(chapter, []):
+                entity_id = str(change.get("entity_id") or "")
+                if entity_id and entity_id in entity_map:
+                    involved[entity_id] = entity_map[entity_id]
+
+            commit_status = "recorded"
+            commit_path = _story_system_dir() / "commits" / f"chapter_{chapter:03d}.commit.json"
+            if commit_path.is_file():
+                try:
+                    commit_payload = json.loads(commit_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    commit_payload = {}
+                meta = commit_payload.get("meta") if isinstance(commit_payload, dict) else {}
+                if isinstance(meta, dict):
+                    commit_status = str(meta.get("status") or commit_status)
+
+            normalized_chapters.append(
+                {
+                    **row,
+                    "chapter": chapter,
+                    "word_count": (
+                        int(row.get("word_count") or 0)
+                        if str(row.get("word_count") or "0").lstrip("-").isdigit()
+                        else 0
+                    ),
+                    "characters": character_ids,
+                    "status": commit_status,
+                    "entities": list(involved.values()),
+                    "changes": changes_by_chapter.get(chapter, []),
+                    "new_entities": first_appearances.get(chapter, []),
+                }
+            )
+
+        chapter_numbers = [item["chapter"] for item in normalized_chapters]
+        outline_plans = load_all_volume_outline_plans(_get_project_root())
+        outline_plans_by_volume = {
+            int(item["volume"]): item
+            for item in outline_plans
+            if int(item.get("volume") or 0) > 0
+        }
+        volume_ranges = _volume_ranges_from_state(state, chapter_numbers)
+        for outline_plan in outline_plans:
+            volume_num = int(outline_plan.get("volume") or 0)
+            start = int(outline_plan.get("start_chapter") or 0)
+            end = int(outline_plan.get("end_chapter") or 0)
+            if volume_num <= 0 or start <= 0 or end < start:
+                continue
+            existing = next(
+                (item for item in volume_ranges if item.get("volume") == volume_num),
+                None,
+            )
+            if existing is None:
+                volume_ranges.append(
+                    {
+                        "volume": volume_num,
+                        "label": outline_plan.get("label") or f"第 {volume_num} 卷",
+                        "start_chapter": start,
+                        "end_chapter": end,
+                    }
+                )
+                continue
+            generic_labels = {f"第 {volume_num} 卷", f"第{volume_num}卷"}
+            if outline_plan.get("title") and existing.get("label") in generic_labels:
+                existing["label"] = outline_plan["label"]
+        unassigned = [
+            chapter
+            for chapter in chapter_numbers
+            if not any(item["start_chapter"] <= chapter <= item["end_chapter"] for item in volume_ranges)
+        ]
+        if unassigned:
+            run_start = unassigned[0]
+            run_end = unassigned[0]
+            for chapter in unassigned[1:] + [None]:
+                if chapter is not None and chapter == run_end + 1:
+                    run_end = chapter
+                    continue
+                volume_ranges.append(
+                    {
+                        "volume": 0,
+                        "label": "未分卷",
+                        "start_chapter": run_start,
+                        "end_chapter": run_end,
+                    }
+                )
+                if chapter is not None:
+                    run_start = chapter
+                    run_end = chapter
+
+        try:
+            current_chapter = int(progress.get("current_chapter") or max(chapter_numbers or [0]))
+        except (TypeError, ValueError):
+            current_chapter = max(chapter_numbers or [0])
+        current_volume = progress.get("current_volume")
+        try:
+            current_volume = int(current_volume or 0)
+        except (TypeError, ValueError):
+            current_volume = 0
+
+        volume_payloads: list[dict] = []
+        for volume in sorted(volume_ranges, key=lambda item: (item["start_chapter"], item["volume"])):
+            start = volume["start_chapter"]
+            end = volume["end_chapter"]
+            outline_plan = outline_plans_by_volume.get(int(volume.get("volume") or 0), {})
+            outline_stages = outline_plan.get("stages") if isinstance(outline_plan, dict) else []
+            if isinstance(outline_stages, list) and outline_stages:
+                stages = [
+                    {**stage, "chapters": []}
+                    for stage in outline_stages
+                    if start <= int(stage.get("start_chapter") or 0) <= end
+                ]
+            else:
+                stages = _build_stage_ranges(start, end)
+
+            recorded_volume_chapters = [
+                item for item in normalized_chapters if start <= item["chapter"] <= end
+            ]
+            recorded_by_number = {item["chapter"]: item for item in recorded_volume_chapters}
+            planned_chapter_rows = outline_plan.get("chapters") if isinstance(outline_plan, dict) else []
+            planned_by_number = {
+                int(item["chapter"]): item
+                for item in (planned_chapter_rows or [])
+                if start <= int(item.get("chapter") or 0) <= end
+            }
+            volume_chapters: list[dict] = []
+            for chapter_num in sorted(set(recorded_by_number) | set(planned_by_number)):
+                recorded = recorded_by_number.get(chapter_num)
+                planned = planned_by_number.get(chapter_num)
+                if recorded is None and planned is not None:
+                    volume_chapters.append(dict(planned))
+                    continue
+                if recorded is None:
+                    continue
+                merged = dict(recorded)
+                merged["is_recorded"] = True
+                if planned is not None:
+                    merged["title"] = recorded.get("title") or planned.get("title") or ""
+                    merged["summary"] = recorded.get("summary") or planned.get("summary") or ""
+                    merged["outline"] = planned.get("outline") or {}
+                    merged["outline_source"] = planned.get("outline_source") or ""
+                    merged["planned_entities"] = planned.get("planned_entities") or []
+                else:
+                    merged["outline"] = {}
+                    merged["outline_source"] = ""
+                    merged["planned_entities"] = []
+                volume_chapters.append(merged)
+
+            volume_entities = [
+                item for item in normalized_entities if start <= item["first_appearance"] <= end
+            ]
+            volume_type_counts: dict[str, int] = {}
+            for entity in volume_entities:
+                entity_type = entity["type"]
+                volume_type_counts[entity_type] = volume_type_counts.get(entity_type, 0) + 1
+
+            for chapter in volume_chapters:
+                for stage in stages:
+                    if stage["start_chapter"] <= chapter["chapter"] <= stage["end_chapter"]:
+                        stage["chapters"].append(chapter)
+                        break
+            for stage in stages:
+                stage["recorded_chapters"] = sum(
+                    1 for item in stage["chapters"] if item.get("is_recorded")
+                )
+                stage["planned_chapters"] = stage["end_chapter"] - stage["start_chapter"] + 1
+                stage["change_count"] = sum(len(item["changes"]) for item in stage["chapters"])
+                stage["outlined_chapters"] = sum(
+                    1 for item in stage["chapters"] if item.get("outline")
+                )
+
+            planned_chapters = end - start + 1
+            recorded_chapters = len(recorded_volume_chapters)
+            volume_payloads.append(
+                {
+                    **volume,
+                    "range_id": f"{volume['volume']}-{start}-{end}",
+                    "is_current": (volume["volume"] > 0 and volume["volume"] == current_volume)
+                    or (start <= current_chapter <= end),
+                    "planned_chapters": planned_chapters,
+                    "recorded_chapters": recorded_chapters,
+                    "completion_percent": round(min(100, recorded_chapters * 100 / planned_chapters), 1),
+                    "entity_counts": volume_type_counts,
+                    "new_entities": volume_entities,
+                    "outlined_chapters": len(planned_by_number),
+                    "outline_source": outline_plan.get("source_file") if isinstance(outline_plan, dict) else "",
+                    "stages": stages,
+                }
+            )
+
+        return {
+            "current_chapter": current_chapter,
+            "current_volume": current_volume,
+            "recorded_chapters": len(normalized_chapters),
+            "planned_chapters": sum(item["planned_chapters"] for item in volume_payloads),
+            "outlined_chapters": sum(item["outlined_chapters"] for item in volume_payloads),
+            "entity_counts": entity_type_counts,
+            "entity_total": len(normalized_entities),
+            "volumes": volume_payloads,
+        }
 
     @app.get("/api/entities")
     def list_entities(
