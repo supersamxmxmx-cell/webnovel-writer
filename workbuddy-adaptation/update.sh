@@ -224,11 +224,24 @@ fi
 
 echo ""
 
-# ============ Step 5: 清理 Python 缓存 ============
-echo "[5/6] 清理 Python 缓存"
+# ============ Step 5: 清理 Python 缓存 + 杀旧 dashboard 进程 ============
+echo "[5/6] 清理 Python 缓存 + 停止旧 dashboard 进程"
+
+# 清理 __pycache__
 find "$SKILL_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find "$SKILL_DIR" -name "*.pyc" -delete 2>/dev/null || true
 info "已清理 __pycache__ 和 .pyc 文件"
+
+# 停止旧 dashboard 进程（Python 进程加载的是旧代码，磁盘更新后不会自动重载）
+DASHBOARD_PID=$(lsof -ti :8765 -sTCP:LISTEN 2>/dev/null || true)
+if [ -n "$DASHBOARD_PID" ]; then
+    kill "$DASHBOARD_PID" 2>/dev/null || true
+    sleep 1
+    info "已停止旧 dashboard 进程 (PID: $DASHBOARD_PID，端口 8765)"
+    warn "请重新启动 dashboard 以加载最新代码"
+else
+    info "无运行中的 dashboard 进程"
+fi
 echo ""
 
 # ============ Step 6: 检查依赖并验证 ============
