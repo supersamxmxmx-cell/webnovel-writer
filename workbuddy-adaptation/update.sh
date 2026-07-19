@@ -8,10 +8,11 @@ set -euo pipefail
 #   bash update.sh --upstream   # 先从原仓库同步到 fork，再更新 skill
 #
 # 安全策略:
-#   - 不删除任何目录，只用 cp -R 覆盖同名文件
-#   - WorkBuddy 适配文件（SKILL.md、convert_to_workbuddy.py、install.sh、update.sh、hooks/README.md）
-#     放在不会被源文件覆盖的位置，更新后自动保留
-#   - 更新前自动备份整个 skill 目录
+#   - 不删除整个 skill 目录，用 cp -R 覆盖同名文件
+#   - 对带 content hash 的构建产物目录（dist）先清空再复制
+#   - WorkBuddy 适配文件放在不会被覆盖的位置，更新后自动保留
+#   - 更新前自动备份，只保留最近 3 个备份
+#   - 清理 __pycache__ 防止旧 .pyc 干扰
 
 # ============ 配置 ============
 REPO_DIR="/Users/supersam/Workbuddy/webnovel-writer进行workbuddy兼容/webnovel-writer"
@@ -38,12 +39,10 @@ if [ "${1:-}" = "--sync" ] || [ "${1:-}" = "--upstream" ]; then
     cd "$REPO_DIR"
 
     if [ "${1:-}" = "--upstream" ]; then
-        # 添加 upstream remote（如果不存在）
         if ! git remote get-url upstream >/dev/null 2>&1; then
             info "添加 upstream remote: $ORIGINAL_REPO"
             git remote add upstream "https://github.com/${ORIGINAL_REPO}.git"
         fi
-
         echo ""
         echo "--- 从原仓库拉取最新代码 ---"
         git fetch upstream
@@ -61,17 +60,15 @@ if [ "${1:-}" = "--sync" ] || [ "${1:-}" = "--upstream" ]; then
 fi
 
 # ============ Step 1: 检查环境 ============
-echo "[1/5] 检查环境"
+echo "[1/6] 检查环境"
 if [ ! -d "$REPO_DIR" ]; then
     error "本地仓库不存在: $REPO_DIR"
     exit 1
 fi
-
 if [ ! -d "$SRC_DIR" ]; then
     error "源目录不存在: $SRC_DIR"
     exit 1
 fi
-
 if [ ! -f "$VENV_PYTHON" ]; then
     error "Python venv 不存在: $VENV_PYTHON"
     echo "  请先运行: bash install.sh"
@@ -83,28 +80,36 @@ CURRENT_VERSION=""
 if [ -f "$SKILL_DIR/scripts/data_modules/config.py" ]; then
     CURRENT_VERSION=$(grep -o 'VERSION.*=.*"[^"]*"' "$SKILL_DIR/scripts/data_modules/config.py" 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/' || echo "")
 fi
-
 info "当前安装版本: ${CURRENT_VERSION:-未知}"
 info "本地仓库: $REPO_DIR"
 echo ""
 
 # ============ Step 2: 备份当前 skill ============
-echo "[2/5] 备份当前 skill"
+echo "[2/6] 备份当前 skill"
 BACKUP_DIR="$HOME/.workbuddy/skills/.webnovel-writer-backup-$(date +%Y%m%d-%H%M%S)"
 if [ -d "$SKILL_DIR" ]; then
     mkdir -p "$(dirname "$BACKUP_DIR")"
     cp -R "$SKILL_DIR" "$BACKUP_DIR"
     info "已备份到: $BACKUP_DIR"
+
+    # 清理旧备份，只保留最近 3 个
+    BACKUP_COUNT=$(ls -1d "$HOME/.workbuddy/skills/.webnovel-writer-backup-"* 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$BACKUP_COUNT" -gt 3 ]; then
+        REMOVE_COUNT=$((BACKUP_COUNT - 3))
+        info "发现 $BACKUP_COUNT 个备份，清理最旧的 $REMOVE_COUNT 个"
+        ls -1dt "$HOME/.workbuddy/skills/.webnovel-writer-backup-"* | tail -n "$REMOVE_COUNT" | while read old_backup; do
+            rm -rf "$old_backup"
+        done
+    fi
 else
     warn "skill 目录不存在，跳过备份"
 fi
 echo ""
 
 # ============ Step 3: 覆盖更新源文件 ============
-echo "[3/5] 更新源文件"
+echo "[3/6] 更新源文件"
 
-# 临时保存 WorkBuddy 适配文件（这些文件不在原始项目的对应位置，不会被覆盖，
-# 但为保险起见，先存到临时位置）
+# 临时保存 WorkBuddy 适配文件
 TMP_WB_FILES=$(mktemp -d)
 for f in SKILL.md convert_to_workbuddy.py install.sh update.sh; do
     [ -f "$SKILL_DIR/$f" ] && cp "$SKILL_DIR/$f" "$TMP_WB_FILES/"
@@ -112,21 +117,29 @@ done
 [ -f "$SKILL_DIR/hooks/README.md" ] && cp "$SKILL_DIR/hooks/README.md" "$TMP_WB_FILES/hooks_README.md"
 
 # 覆盖复制原始项目的核心目录
-# - 普通目录用 cp -R 覆盖（同名文件覆盖，新增文件加入，不删除旧文件）
-# - dashboard/frontend/dist 是 Vite 构建产物，文件名带 content hash，
-#   cp -R 只会添加新文件不会删旧的，所以这个目录要先清空再复制
 for dir in scripts references templates dashboard agents hooks; do
     if [ -d "$SRC_DIR/$dir" ]; then
         mkdir -p "$SKILL_DIR/$dir"
 
-        # dashboard/frontend/dist 特殊处理：先清空再复制
+        # dashboard/frontend/dist: Vite 构建产物，文件名带 content hash，必须先清空
         if [ "$dir" = "dashboard" ] && [ -d "$SKILL_DIR/dashboard/frontend/dist" ]; then
             rm -f "$SKILL_DIR/dashboard/frontend/dist/index.html"
             rm -rf "$SKILL_DIR/dashboard/frontend/dist/assets"
-            info "已清理旧的 dashboard/frontend/dist 构建产物"
+            info "  已清理旧的 dashboard/frontend/dist 构建产物"
         fi
 
-        cp -R "$SRC_DIR/$dir/"* "$SKILL_DIR/$dir/"
+        # agents: 只复制 .md 文件，不复制 evals 子目录（Claude Code 专用，WorkBuddy 不需要）
+        if [ "$dir" = "agents" ]; then
+            # 清理可能存在的 evals 子目录（旧版 update.sh 可能复制了进来）
+            if [ -d "$SKILL_DIR/agents/evals" ]; then
+                rm -rf "$SKILL_DIR/agents/evals"
+                info "  已清理旧的 agents/evals 目录"
+            fi
+            cp "$SRC_DIR/agents/"*.md "$SKILL_DIR/agents/"
+        else
+            cp -R "$SRC_DIR/$dir/"* "$SKILL_DIR/$dir/"
+        fi
+
         info "已更新 $dir/"
     fi
 done
@@ -140,14 +153,14 @@ done
 [ -f "$TMP_WB_FILES/hooks_README.md" ] && cp "$TMP_WB_FILES/hooks_README.md" "$SKILL_DIR/hooks/README.md"
 rm -rf "$TMP_WB_FILES"
 
-# 覆盖复制每个 skill 的 references 和 evals
+# 覆盖复制每个 skill 的 references 和 evals（不复制 agents 子目录，那是 Claude Code 专用）
 for skill in webnovel-init webnovel-plan webnovel-write webnovel-review webnovel-query webnovel-learn webnovel-dashboard webnovel-doctor; do
     if [ -d "$SRC_DIR/skills/$skill/references" ]; then
-        mkdir -p "$SKILL_DIR/commands/$skill"
+        mkdir -p "$SKILL_DIR/commands/$skill/references"
         cp -R "$SRC_DIR/skills/$skill/references/"* "$SKILL_DIR/commands/$skill/references/" 2>/dev/null || true
     fi
     if [ -d "$SRC_DIR/skills/$skill/evals" ]; then
-        mkdir -p "$SKILL_DIR/commands/$skill"
+        mkdir -p "$SKILL_DIR/commands/$skill/evals"
         cp -R "$SRC_DIR/skills/$skill/evals/"* "$SKILL_DIR/commands/$skill/evals/" 2>/dev/null || true
     fi
 done
@@ -161,9 +174,16 @@ fi
 echo ""
 
 # ============ Step 4: 重新转换为 WorkBuddy 格式 ============
-echo "[4/5] 重新转换为 WorkBuddy 格式"
+echo "[4/6] 重新转换为 WorkBuddy 格式"
 
 if [ -f "$SKILL_DIR/convert_to_workbuddy.py" ]; then
+    # 先清理转换脚本上次生成的顶层 .md 文件（防止残留）
+    for cmd in webnovel-init webnovel-plan webnovel-write webnovel-review webnovel-query webnovel-learn webnovel-dashboard webnovel-doctor; do
+        if [ -f "$SKILL_DIR/commands/$cmd.md" ]; then
+            rm -f "$SKILL_DIR/commands/$cmd.md"
+        fi
+    done
+
     "$VENV_PYTHON" "$SKILL_DIR/convert_to_workbuddy.py"
 
     # 修复转换后文件中的残留引用
@@ -172,11 +192,12 @@ if [ -f "$SKILL_DIR/convert_to_workbuddy.py" ]; then
     find "$SKILL_DIR/commands" -name "*.md" -exec sed -i '' \
         's|${CLAUDE_PLUGIN_ROOT}|${PLUGIN_ROOT}|g' {} + 2>/dev/null || true
 
-    # 重新整理目录结构：转换脚本生成 commands/*.md，需要移到 commands/*/SKILL.md
+    # 把转换生成的 commands/*.md 移到 commands/*/SKILL.md
     for cmd in webnovel-init webnovel-plan webnovel-write webnovel-review webnovel-query webnovel-learn webnovel-dashboard webnovel-doctor; do
-        if [ -f "$SKILL_DIR/commands/$cmd.md" ] && [ ! -f "$SKILL_DIR/commands/$cmd/SKILL.md" ]; then
+        if [ -f "$SKILL_DIR/commands/$cmd.md" ]; then
             mkdir -p "$SKILL_DIR/commands/$cmd"
-            mv "$SKILL_DIR/commands/$cmd.md" "$SKILL_DIR/commands/$cmd/SKILL.md"
+            # 覆盖旧的 SKILL.md
+            mv -f "$SKILL_DIR/commands/$cmd.md" "$SKILL_DIR/commands/$cmd/SKILL.md"
         fi
     done
 
@@ -203,8 +224,15 @@ fi
 
 echo ""
 
-# ============ Step 5: 检查依赖并验证 ============
-echo "[5/5] 检查依赖并验证"
+# ============ Step 5: 清理 Python 缓存 ============
+echo "[5/6] 清理 Python 缓存"
+find "$SKILL_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$SKILL_DIR" -name "*.pyc" -delete 2>/dev/null || true
+info "已清理 __pycache__ 和 .pyc 文件"
+echo ""
+
+# ============ Step 6: 检查依赖并验证 ============
+echo "[6/6] 检查依赖并验证"
 
 # 检查 requirements.txt 是否有变化
 REINSTALL_DEPS=false
@@ -240,11 +268,58 @@ else
     exit 1
 fi
 
-COMMAND_COUNT=$(find "$SKILL_DIR/commands" -name "SKILL.md" | wc -l | tr -d ' ')
-AGENT_COUNT=$(ls -1 "$SKILL_DIR/agents/"*.md 2>/dev/null | wc -l | tr -d ' ')
+# 验证关键文件完整性
+VERIFY_PASS=true
 
-info "命令文件: $COMMAND_COUNT 个"
-info "Agent 文件: $AGENT_COUNT 个"
+# 验证适配文件
+for f in SKILL.md convert_to_workbuddy.py install.sh update.sh hooks/README.md; do
+    if [ ! -f "$SKILL_DIR/$f" ]; then
+        error "适配文件缺失: $f"
+        VERIFY_PASS=false
+    fi
+done
+
+# 验证命令文件
+COMMAND_COUNT=$(find "$SKILL_DIR/commands" -name "SKILL.md" | wc -l | tr -d ' ')
+if [ "$COMMAND_COUNT" -ne 8 ]; then
+    error "命令文件数量异常: $COMMAND_COUNT (应为 8)"
+    VERIFY_PASS=false
+fi
+
+# 验证 Agent 文件
+AGENT_COUNT=$(ls -1 "$SKILL_DIR/agents/"*.md 2>/dev/null | wc -l | tr -d ' ')
+if [ "$AGENT_COUNT" -ne 4 ]; then
+    error "Agent 文件数量异常: $AGENT_COUNT (应为 4)"
+    VERIFY_PASS=false
+fi
+
+# 验证 dashboard 前端
+if [ ! -f "$SKILL_DIR/dashboard/frontend/dist/index.html" ]; then
+    error "dashboard 前端构建产物缺失"
+    VERIFY_PASS=false
+fi
+
+# 验证无残留的顶层 .md 文件
+STALE_MD=$(find "$SKILL_DIR/commands" -maxdepth 1 -name "*.md" | wc -l | tr -d ' ')
+if [ "$STALE_MD" -ne 0 ]; then
+    warn "发现 $STALE_MD 个残留的顶层命令文件，清理中..."
+    find "$SKILL_DIR/commands" -maxdepth 1 -name "*.md" -delete
+fi
+
+if [ "$VERIFY_PASS" = true ]; then
+    info "命令文件: $COMMAND_COUNT 个 ✓"
+    info "Agent 文件: $AGENT_COUNT 个 ✓"
+    info "dashboard 前端: 正常 ✓"
+    info "适配文件: 完整 ✓"
+else
+    error "验证发现问题，请检查上方日志"
+    echo "  可从备份恢复: cp -R $BACKUP_DIR/* $SKILL_DIR/"
+    exit 1
+fi
+
+# 最终清理：验证步骤运行 webnovel.py 会生成 __pycache__，最后清一次
+find "$SKILL_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find "$SKILL_DIR" -name "*.pyc" -delete 2>/dev/null || true
 
 # 获取新版本
 NEW_VERSION=""
@@ -256,7 +331,6 @@ echo ""
 echo "=== 更新完成 ==="
 echo ""
 echo "版本变化: ${CURRENT_VERSION:-未知} → ${NEW_VERSION:-未知}"
-echo ""
 echo "备份位置: $BACKUP_DIR"
 echo ""
 if [ "$CURRENT_VERSION" != "$NEW_VERSION" ] && [ -n "$CURRENT_VERSION" ] && [ -n "$NEW_VERSION" ]; then
